@@ -13,6 +13,9 @@ module MapNewImplementation =
         abstract member Add : comparer : IComparer<'Key> * key : 'Key * value : 'Value -> Node<'Key, 'Value>
         abstract member Remove : comparer : IComparer<'Key> * key : 'Key -> Node<'Key, 'Value>
 
+        abstract member AddMax : key : 'Key * value : 'Value -> Node<'Key, 'Value>
+        abstract member AddMin : key : 'Key * value : 'Value -> Node<'Key, 'Value>
+
         abstract member AddInPlace : comparer : IComparer<'Key> * key : 'Key * value : 'Value -> Node<'Key, 'Value>
 
         abstract member ToList : list<'Key * 'Value> -> list<'Key * 'Value>
@@ -53,6 +56,12 @@ module MapNewImplementation =
         override x.Count = 0
         override x.Height = 0
         override x.Add(_, key, value) =
+            MapLeaf(key, value) :> Node<_,_>
+
+        override x.AddMax(key, value) =
+            MapLeaf(key, value) :> Node<_,_>
+        
+        override x.AddMin(key, value) =
             MapLeaf(key, value) :> Node<_,_>
 
         override x.AddInPlace(_, key, value) =
@@ -109,6 +118,12 @@ module MapNewImplementation =
                 else
                     MapLeaf(key, value) :> Node<'Key,'Value>
                     
+            override x.AddMax(key, value) =
+                MapNode(x, key, value, MapEmpty.Instance) :> Node<_,_>
+        
+            override x.AddMin(key, value) =
+                MapNode(MapEmpty.Instance, key, value, x) :> Node<_,_>
+
             override x.AddInPlace(comparer, key, value) =
                 let c = comparer.Compare(key, x.Key)
 
@@ -219,102 +234,67 @@ module MapNewImplementation =
             val mutable public _Height : int
 
             static member Create(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
-                let b = r.Height - l.Height
+                let lh = l.Height
+                let rh = r.Height
 
-                if b >= 2 then
+                let b = rh - lh
+                if lh = 0 && rh = 0 then
+                    MapLeaf(k, v) :> Node<_,_>
+                elif b > 2 then
+                    // right heavy
                     let r = r :?> MapNode<'Key, 'Value> // must work
                     
-                    if r.Right.Height > r.Left.Height then
+                    if r.Right.Height >= r.Left.Height then
+                        // right right case
                         MapNode.Create(
                             MapNode.Create(l, k, v, r.Left),
                             r.Key, r.Value,
                             r.Right
-                        )
+                        ) 
                     else
-                        let rl = r.Left :?> MapNode<'Key, 'Value>
+                        // right left case
+                        match r.Left with
+                        | :? MapNode<'Key, 'Value> as rl ->
+                            //let rl = r.Left :?> MapNode<'Key, 'Value>
+                            let t1 = l
+                            let t2 = rl.Left
+                            let t3 = rl.Right
+                            let t4 = r.Right
 
-                        let t1 = l
-                        let t2 = rl.Left
-                        let t3 = rl.Right
-                        let t4 = r.Right
+                            MapNode.Create(
+                                MapNode.Create(t1, k, v, t2),
+                                rl.Key, rl.Value,
+                                MapNode.Create(t3, r.Key, r.Value, t4)
+                            )
+                        | _ ->
+                            failwith "impossible"
+                            
 
-                        MapNode.Create(
-                            MapNode.Create(t1, k, v, t2),
-                            rl.Key, rl.Value,
-                            MapNode.Create(t3, r.Key, r.Value, t4)
-                        )
-
-                elif b <= -2 then   
+                elif b < -2 then   
                     let l = l :?> MapNode<'Key, 'Value> // must work
                     
-                    if l.Right.Height > l.Left.Height then
-                        let lr = l.Right :?> MapNode<'Key, 'Value>
-
-                        let t1 = l.Left
-                        let t2 = lr.Left
-                        let t3 = lr.Right
-                        let t4 = r
-
-                        MapNode.Create(
-                            MapNode.Create(t1, l.Key, l.Value, t2),
-                            lr.Key, lr.Value,
-                            MapNode.Create(t3, k, v, t4)
-                        )
-                    else
+                    if l.Left.Height >= l.Right.Height then
                         MapNode.Create(
                             l.Left,
                             l.Key, l.Value,
                             MapNode.Create(l.Right, k, v, r)
                         )
-                else
-                    MapNode(l, k, v, r) :> Node<_,_>
-
-            static member CreateUnsafe(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
-                let b = r.Height - l.Height
-
-                if b >= 2 then
-                    let r = r :?> MapNode<'Key, 'Value> // must work
-                    
-                    if r.Right.Height >= r.Left.Height then
-                        MapNode(
-                            MapNode(l, k, v, r.Left),
-                            r.Key, r.Value,
-                            r.Right
-                        ) :> Node<_,_>
-                    else
-                        let rl = r.Left :?> MapNode<'Key, 'Value>
-                        let t1 = l
-                        let t2 = rl.Left
-                        let t3 = rl.Right
-                        let t4 = r.Right
-
-                        MapNode(
-                            MapNode(t1, k, v, t2),
-                            rl.Key, rl.Value,
-                            MapNode(t3, r.Key, r.Value, t4)
-                        ) :> Node<_,_>
-
-                elif b <= -2 then   
-                    let l = l :?> MapNode<'Key, 'Value> // must work
-                    
-                    if l.Left.Height >= l.Right.Height then
-                        MapNode(
-                            l.Left,
-                            l.Key, l.Value,
-                            MapNode(l.Right, k, v, r)
-                        ) :> Node<_,_>
 
                     else
-                        let lr = l.Right :?> MapNode<'Key, 'Value>
-                        let t1 = l.Left
-                        let t2 = lr.Left
-                        let t3 = lr.Right
-                        let t4 = r
-                        MapNode(
-                            MapNode(t1, l.Key, l.Value, t2),
-                            lr.Key, lr.Value,
-                            MapNode(t3, k, v, t4)
-                        ) :> Node<_,_>
+                        match l.Right with
+                        | :? MapNode<'Key, 'Value> as lr -> 
+                            let t1 = l.Left
+                            let t2 = lr.Left
+                            let t3 = lr.Right
+                            let t4 = r
+                            MapNode.Create(
+                                MapNode.Create(t1, l.Key, l.Value, t2),
+                                lr.Key, lr.Value,
+                                MapNode.Create(t3, k, v, t4)
+                            )
+                        | _ ->
+                            failwith "impossible"
+
                 else
                     MapNode(l, k, v, r) :> Node<_,_>
 
@@ -337,13 +317,13 @@ module MapNewImplementation =
             override x.Add(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
-                    MapNode.CreateUnsafe(
+                    MapNode.Create(
                         x.Left, 
                         x.Key, x.Value,
                         x.Right.Add(comparer, key, value)
                     )
                 elif c < 0 then
-                    MapNode.CreateUnsafe(
+                    MapNode.Create(
                         x.Left.Add(comparer, key, value), 
                         x.Key, x.Value,
                         x.Right
@@ -355,6 +335,19 @@ module MapNewImplementation =
                         x.Right
                     ) :> Node<_,_>
                     
+            override x.AddMax(key : 'Key, value : 'Value) =
+                MapNode.Create(
+                    x.Left, 
+                    x.Key, x.Value,
+                    x.Right.AddMax(key, value)
+                )
+                   
+            override x.AddMin(key : 'Key, value : 'Value) =
+                MapNode.Create(
+                    x.Left.AddMin(key, value), 
+                    x.Key, x.Value,
+                    x.Right
+                )
             override x.AddInPlace(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
@@ -366,7 +359,7 @@ module MapNewImplementation =
                         x._Count <- 1 + x.Right.Count + x.Left.Count
                         x :> Node<_,_>
                     else 
-                        MapNode.CreateUnsafe(
+                        MapNode.Create(
                             x.Left, 
                             x.Key, x.Value,
                             x.Right
@@ -380,7 +373,7 @@ module MapNewImplementation =
                         x._Count <- 1 + x.Right.Count + x.Left.Count
                         x :> Node<_,_>
                     else
-                        MapNode.CreateUnsafe(
+                        MapNode.Create(
                             x.Left, 
                             x.Key, x.Value,
                             x.Right
@@ -393,13 +386,13 @@ module MapNewImplementation =
             override x.Remove(comparer : IComparer<'Key>, key : 'Key) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
-                    MapNode.CreateUnsafe(
+                    MapNode.Create(
                         x.Left, 
                         x.Key, x.Value,
                         x.Right.Remove(comparer, key)
                     )
                 elif c < 0 then
-                    MapNode.CreateUnsafe(
+                    MapNode.Create(
                         x.Left.Remove(comparer, key), 
                         x.Key, x.Value,
                         x.Right
@@ -512,14 +505,14 @@ module MapNewImplementation =
             override x.TryRemoveHeadV() =
                 match x.Left.TryRemoveHeadV() with
                 | ValueSome struct(k, v, l1) ->
-                    ValueSome (struct(k, v, MapNode.CreateUnsafe(l1, x.Key, x.Value, x.Right)))
+                    ValueSome (struct(k, v, MapNode.Create(l1, x.Key, x.Value, x.Right)))
                 | ValueNone ->
                     ValueSome (struct(x.Key, x.Value, x.Right))
 
             override x.TryRemoveTailV() =   
                 match x.Right.TryRemoveTailV() with
                 | ValueSome struct(r1, k, v) ->
-                    ValueSome struct(MapNode.CreateUnsafe(x.Left, x.Key, x.Value, r1), k, v)
+                    ValueSome struct(MapNode.Create(x.Left, x.Key, x.Value, r1), k, v)
                 | ValueNone ->
                     ValueSome struct(x.Left, x.Key, x.Value)
                     
@@ -528,19 +521,19 @@ module MapNewImplementation =
                     struct(x.Key, x.Value, x.Right)
                 else
                     let struct(k,v,l1) = x.Left.UnsafeRemoveHeadV()
-                    struct(k, v, MapNode.CreateUnsafe(l1, x.Key, x.Value, x.Right))
+                    struct(k, v, MapNode.Create(l1, x.Key, x.Value, x.Right))
 
             override x.UnsafeRemoveTailV() =   
                 if x.Right.Height = 0 then
                     struct(x.Left, x.Key, x.Value)
                 else
                     let struct(r1,k,v) = x.Right.UnsafeRemoveTailV()
-                    struct(MapNode.CreateUnsafe(x.Left, x.Key, x.Value, r1), k, v)
+                    struct(MapNode.Create(x.Left, x.Key, x.Value, r1), k, v)
 
 
             new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 assert(l.Height > 0 || r.Height > 0)    // not both empty
-                assert(abs (r.Height - l.Height) < 2)   // balanced
+                assert(abs (r.Height - l.Height) <= 2)   // balanced
                 {
                     Left = l
                     Right = r
