@@ -12,15 +12,10 @@ module MapNewImplementation =
 
         abstract member Add : comparer : IComparer<'Key> * key : 'Key * value : 'Value -> Node<'Key, 'Value>
         abstract member Remove : comparer : IComparer<'Key> * key : 'Key -> Node<'Key, 'Value>
-
-        abstract member AddMax : key : 'Key * value : 'Value -> Node<'Key, 'Value>
-        abstract member AddMin : key : 'Key * value : 'Value -> Node<'Key, 'Value>
-
         abstract member AddInPlace : comparer : IComparer<'Key> * key : 'Key * value : 'Value -> Node<'Key, 'Value>
 
         abstract member ToList : list<'Key * 'Value> -> list<'Key * 'Value>
         abstract member ToListV : list<struct('Key * 'Value)> -> list<struct('Key * 'Value)>
-
         abstract member CopyTo : dst : ('Key * 'Value)[] * index : int -> int
         abstract member CopyToV : dst : struct('Key * 'Value)[] * index : int -> int
         abstract member CopyToKeyValue : dst : KeyValuePair<'Key, 'Value>[] * index : int -> int
@@ -34,7 +29,6 @@ module MapNewImplementation =
         abstract member Filter : predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool> -> Node<'Key, 'Value>
         abstract member Choose : mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, option<'T>> -> Node<'Key, 'T>
         abstract member ChooseV : mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>> -> Node<'Key, 'T>
-
         abstract member Exists : predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool> -> bool
         abstract member Forall : predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool> -> bool
         abstract member Fold : folder : OptimizedClosures.FSharpFunc<'State, 'Key, 'Value, 'State> * seed : 'State -> 'State
@@ -42,9 +36,13 @@ module MapNewImplementation =
 
         abstract member TryRemoveHeadV : unit -> voption<struct('Key * 'Value * Node<'Key, 'Value>)>
         abstract member TryRemoveTailV : unit -> voption<struct(Node<'Key, 'Value> * 'Key * 'Value)>
-        
         abstract member UnsafeRemoveHeadV : unit -> struct('Key * 'Value * Node<'Key, 'Value>)
         abstract member UnsafeRemoveTailV : unit -> struct(Node<'Key, 'Value> * 'Key * 'Value)
+
+        abstract member GetViewBetween : comparer : IComparer<'Key> * min : 'Key * minInclusive : bool * max : 'Key * maxInclusive : bool -> Node<'Key, 'Value>
+        abstract member WithMin : comparer : IComparer<'Key> * min : 'Key * minInclusive : bool -> Node<'Key, 'Value>
+        abstract member WithMax : comparer : IComparer<'Key> * max : 'Key * maxInclusive : bool -> Node<'Key, 'Value>
+
 
     type MapEmpty<'Key, 'Value> private() =
         inherit Node<'Key, 'Value>()
@@ -56,12 +54,6 @@ module MapNewImplementation =
         override x.Count = 0
         override x.Height = 0
         override x.Add(_, key, value) =
-            MapLeaf(key, value) :> Node<_,_>
-
-        override x.AddMax(key, value) =
-            MapLeaf(key, value) :> Node<_,_>
-        
-        override x.AddMin(key, value) =
             MapLeaf(key, value) :> Node<_,_>
 
         override x.AddInPlace(_, key, value) =
@@ -96,6 +88,14 @@ module MapNewImplementation =
         override x.UnsafeRemoveHeadV() = failwith "empty"
         override x.UnsafeRemoveTailV() = failwith "empty"
 
+        
+        override x.GetViewBetween(_comparer : IComparer<'Key>, _min : 'Key, _minInclusive : bool, _max : 'Key, _maxInclusive : bool) =
+            x :> Node<_,_>
+        override x.WithMin(_comparer : IComparer<'Key>, _min : 'Key, _minInclusive : bool) =
+            x :> Node<_,_>
+        override x.WithMax(_comparer : IComparer<'Key>, _max : 'Key, _maxInclusive : bool) =
+            x :> Node<_,_>
+
     and MapLeaf<'Key, 'Value> =
         class 
             inherit Node<'Key, 'Value>
@@ -118,12 +118,6 @@ module MapNewImplementation =
                 else
                     MapLeaf(key, value) :> Node<'Key,'Value>
                     
-            override x.AddMax(key, value) =
-                MapNode(x, key, value, MapEmpty.Instance) :> Node<_,_>
-        
-            override x.AddMin(key, value) =
-                MapNode(MapEmpty.Instance, key, value, x) :> Node<_,_>
-
             override x.AddInPlace(comparer, key, value) =
                 let c = comparer.Compare(key, x.Key)
 
@@ -218,6 +212,32 @@ module MapNewImplementation =
 
             override x.UnsafeRemoveTailV() =
                 struct(MapEmpty<'Key, 'Value>.Instance, x.Key, x.Value)
+
+            
+            override x.GetViewBetween(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool, max : 'Key, maxInclusive : bool) =
+                let cMin = comparer.Compare(x.Key, min)
+                if (if minInclusive then cMin >= 0 else cMin > 0) then
+                    let cMax = comparer.Compare(x.Key, max)
+                    if (if maxInclusive then cMax <= 0 else cMax < 0) then
+                        x :> Node<_,_>
+                    else
+                        MapEmpty.Instance
+                else
+                    MapEmpty.Instance
+                    
+            override x.WithMin(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool) =
+                let cMin = comparer.Compare(x.Key, min)
+                if (if minInclusive then cMin >= 0 else cMin > 0) then
+                    x :> Node<_,_>
+                else
+                    MapEmpty.Instance
+                    
+            override x.WithMax(comparer : IComparer<'Key>, max : 'Key, maxInclusive : bool) =
+                let cMax = comparer.Compare(x.Key, max)
+                if (if maxInclusive then cMax <= 0 else cMax < 0) then
+                    x :> Node<_,_>
+                else
+                    MapEmpty.Instance
 
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
@@ -335,19 +355,6 @@ module MapNewImplementation =
                         x.Right
                     ) :> Node<_,_>
                     
-            override x.AddMax(key : 'Key, value : 'Value) =
-                MapNode.Create(
-                    x.Left, 
-                    x.Key, x.Value,
-                    x.Right.AddMax(key, value)
-                )
-                   
-            override x.AddMin(key : 'Key, value : 'Value) =
-                MapNode.Create(
-                    x.Left.AddMin(key, value), 
-                    x.Key, x.Value,
-                    x.Right
-                )
             override x.AddInPlace(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
@@ -529,7 +536,65 @@ module MapNewImplementation =
                 else
                     let struct(r1,k,v) = x.Right.UnsafeRemoveTailV()
                     struct(MapNode.Create(x.Left, x.Key, x.Value, r1), k, v)
+                    
 
+            override x.WithMin(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool) =
+                let c = comparer.Compare(x.Key, min)
+                let greaterMin = if minInclusive then c >= 0 else c > 0
+                if greaterMin then
+                    MapNode.Create(
+                        x.Left.WithMin(comparer, min, minInclusive),
+                        x.Key, x.Value,
+                        x.Right
+                    )
+                else
+                    x.Right.WithMin(comparer, min, minInclusive)
+
+                
+            override x.WithMax(comparer : IComparer<'Key>, max : 'Key, maxInclusive : bool) =
+                let c = comparer.Compare(x.Key, max)
+                let smallerMax = if maxInclusive then c <= 0 else c < 0
+                if smallerMax then
+                    MapNode.Create(
+                        x.Left,
+                        x.Key, x.Value,
+                        x.Right.WithMax(comparer, max, maxInclusive)
+                    )
+                else
+                    x.Left.WithMax(comparer, max, maxInclusive)
+                    
+
+
+            override x.GetViewBetween(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool, max : 'Key, maxInclusive : bool) =
+                let cMin = comparer.Compare(x.Key, min)
+                let cMax = comparer.Compare(x.Key, max)
+
+                let greaterMin = if minInclusive then cMin >= 0 else cMin > 0
+                let smallerMax = if maxInclusive then cMax <= 0 else cMax < 0
+
+                if not greaterMin then
+                    x.Right.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
+
+                elif not smallerMax then
+                    x.Left.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
+
+                elif greaterMin && smallerMax then
+                    let l = x.Left.WithMin(comparer, min, minInclusive)
+                    let r = x.Right.WithMax(comparer, max, maxInclusive)
+                    MapNode.Create(l, x.Key, x.Value, r)
+
+                elif greaterMin then
+                    let l = x.Left.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
+                    let r = x.Right.WithMax(comparer, max, maxInclusive)
+                    MapNode.Create(l, x.Key, x.Value, r)
+
+                elif smallerMax then
+                    let l = x.Left.WithMin(comparer, min, minInclusive)
+                    let r = x.Right.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
+                    MapNode.Create(l, x.Key, x.Value, r)
+                    
+                else
+                    failwith ""
 
             new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 assert(l.Height > 0 || r.Height > 0)    // not both empty
@@ -545,7 +610,11 @@ module MapNewImplementation =
         end
 
 open MapNewImplementation
+open System.Diagnostics
 
+[<DebuggerTypeProxy("Aardvark.Base.MapDebugView`2")>]
+[<DebuggerDisplay("Count = {Count}")>]
+[<Sealed>]
 type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'Key>, root : Node<'Key, 'Value>) =
         
     static let defaultComparer = LanguagePrimitives.FastGenericComparer<'Key>
@@ -671,6 +740,15 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     member x.CopyToV(array : struct('Key * 'Value)[], startIndex : int) =
         if startIndex < 0 || startIndex + x.Count >= array.Length then raise <| System.IndexOutOfRangeException("Map.CopyTo")
         root.CopyToV(array, startIndex) |> ignore
+
+    member x.GetViewBetween(minInclusive : 'Key, maxInclusive : 'Key) = 
+        MapNew(comparer, root.GetViewBetween(comparer, minInclusive, true, maxInclusive, true))
+        
+    member x.WithMin(minInclusive : 'Key) = 
+        MapNew(comparer, root.WithMin(comparer, minInclusive, true))
+        
+    member x.WithMax(maxInclusive : 'Key) = 
+        MapNew(comparer, root.WithMax(comparer, maxInclusive, true))
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = new MapNewEnumerator<_,_>(root) :> _
@@ -812,7 +890,22 @@ and MapNewEnumerator<'Key, 'Value> =
 
     end
 
+and MapDebugView<'Key, 'Value when 'Key : comparison> =
 
+    [<DebuggerBrowsable(DebuggerBrowsableState.RootHidden)>]
+    val mutable public Entries : KeyValuePairDebugFriendly<'Key, 'Value>[]
+
+    new(m : MapNew<'Key, 'Value>) =
+        {
+            Entries = Seq.toArray (Seq.map KeyValuePairDebugFriendly (Seq.truncate 10000 m))
+        }
+        
+and
+    [<DebuggerDisplay("{keyValue.Value}", Name = "[{keyValue.Key}]", Type = "")>]
+    KeyValuePairDebugFriendly<'Key, 'Value>(keyValue : KeyValuePair<'Key, 'Value>) =
+
+        [<DebuggerBrowsable(DebuggerBrowsableState.RootHidden)>]
+        member x.KeyValue = keyValue
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module MapNew =
@@ -909,6 +1002,13 @@ module MapNew =
     [<CompiledName("ToArrayValue")>]
     let inline toArrayV (map : MapNew<'Key, 'Value>) = map.ToArrayV()
 
-
-
+    
+    [<CompiledName("WithMin")>]
+    let inline withMin (minInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMin(minInclusive)
+    
+    [<CompiledName("WithMax")>]
+    let inline withMax (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMax(maxInclusive)
+    
+    [<CompiledName("WithRange")>]
+    let inline withRange (minInclusive : 'Key) (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.GetViewBetween(minInclusive, maxInclusive)
 

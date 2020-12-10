@@ -152,7 +152,7 @@ let tests =
             identical a b
         )
         
-        testProperty "fold" (fun (m : Map<int, int>) (k : int) ->
+        testProperty "fold" (fun (m : Map<int, int>)  ->
             let mn = MapNew.ofSeq (Map.toSeq m)
             identical mn m
 
@@ -161,9 +161,24 @@ let tests =
             a |> should equal b
         )
         
-        testProperty "count" (fun (m : Map<int, int>) (k : int) ->
+        testProperty "count" (fun (m : Map<int, int>) ->
             let mn = MapNew.ofSeq (Map.toSeq m)
             identical mn m
             MapNew.count mn |> should equal (Map.count m)
         )
+
+        testProperty "withRange" (fun (m : Map<int, int>) ->
+            let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
+            let arr = Map.toArray m
+            let mn = MapNew.ofArray arr
+            identical mn m
+
+            let l,_ = arr.[arr.Length / 3]
+            let h,_ = arr.[(2 * arr.Length) / 3]
+
+            let a = MapNew.withRange l h mn
+            let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
+            identical a b
+        )
+
     ]
