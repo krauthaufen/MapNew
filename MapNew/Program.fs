@@ -218,8 +218,6 @@ let parseMarkdownTable (content : string) =
 
 [<EntryPoint>]
 let main _argv =
-    parseMarkdownTable (System.IO.File.ReadAllText @"C:\Users\Schorsch\Desktop\benchmark.md")
-    exit 0
     BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>()
     |> ignore
     0
