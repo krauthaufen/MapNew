@@ -14,7 +14,7 @@ be used in [FSharp.Data.Adaptive](https://github.com/fsprojects/FSharp.Data.Adap
 ### Benchmarks (preliminary)
 
 #### Bottom Line
-* All operations tested so far are about `~1.8x` faster than for the current F# Map
+* All operations tested so far are about `1.2x` - `2x` faster than for the current F# Map
 * The `ofArray` does not only perform better but also allocates way less garbage (see GC stats in benchmark)
 
 ```
