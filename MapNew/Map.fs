@@ -596,6 +596,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         MapNew(comparer, r)
 
     member x.Count = root.Count
+    member x.Root = root
 
     member x.Add(key : 'Key, value : 'Value) =
         MapNew(comparer, root.Add(comparer, key, value))
