@@ -2,9 +2,7 @@
 
 open FsUnit
 open Expecto
-open Expecto.ExpectoFsCheck
-open Expecto.Performance
-open Aardvark.Base
+open MapNew
 
 
 let cfg = 

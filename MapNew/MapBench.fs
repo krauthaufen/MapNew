@@ -2,7 +2,7 @@
 
 open BenchmarkDotNet
 open BenchmarkDotNet.Attributes
-open Aardvark.Base
+open MapNew
 
 
 [<PlainExporter; MemoryDiagnoser>]
@@ -29,8 +29,6 @@ type MapBenchmark() =
                 res.[i] <- v
                 i <- i + 1
         res
-
-
 
     [<GlobalSetup>]
     member x.Setup() =
