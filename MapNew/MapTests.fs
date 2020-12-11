@@ -22,7 +22,7 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> 0
         | :? MapNewImplementation.MapLeaf<'K, 'V> -> 1
-        | :? MapNewImplementation.MapNode<'K, 'V> as n ->
+        | :? MapNewImplementation.MapInner<'K, 'V> as n ->
             let lh = checkHeight n.Left
             let rh = checkHeight n.Right
             let b = abs (rh - lh)
@@ -30,6 +30,10 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
             let h = 1 + max lh rh
             if n._Height <> h then failwithf "node has bad height: %d (should be %d)" n._Height h
             h
+        #if TWO
+        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
+            1
+        #endif
         | _ ->
             failwith "unexpected node"
             
@@ -37,12 +41,16 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> 0
         | :? MapNewImplementation.MapLeaf<'K, 'V> -> 1
-        | :? MapNewImplementation.MapNode<'K, 'V> as n ->
+        | :? MapNewImplementation.MapInner<'K, 'V> as n ->
             let lh = checkCount n.Left
             let rh = checkCount n.Right
             let h = 1 + lh + rh
             if n._Count <> h then failwithf "node has bad count: %d (should be %d)" n._Count h
             h
+        #if TWO
+        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
+            2
+        #endif
         | _ ->
             failwith "unexpected node"
 
@@ -56,10 +64,14 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> []
         | :? MapNewImplementation.MapLeaf<'K, 'V> as l -> [l.Key, l.Value]
-        | :? MapNewImplementation.MapNode<'K, 'V> as n ->
+        | :? MapNewImplementation.MapInner<'K, 'V> as n ->
             let l = getAll n.Left
             let r = getAll n.Right
             l @ [n.Key, n.Value] @ r
+        #if TWO
+        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
+            [n.K0, n.V0; n.K1, n.V1]
+        #endif
         | _ ->
             failwith "unexpected node"
 

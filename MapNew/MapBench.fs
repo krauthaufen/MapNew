@@ -8,7 +8,7 @@ open MapNew
 [<PlainExporter; MemoryDiagnoser>]
 type MapBenchmark() =
 
-    [<DefaultValue; Params(1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 10000)>]
+    [<DefaultValue; Params(10)>]
     val mutable public Count : int
 
     let mutable data : (int * int)[] = [||]
@@ -107,13 +107,13 @@ type MapBenchmark() =
             res <- MapNew.remove k res
         res
         
-    [<Benchmark>]
-    member x.``Map_fold``() =
-        (0, map) ||> Map.fold (fun s k _ -> s + k)
+    //[<Benchmark>]
+    //member x.``Map_fold``() =
+    //    (0, map) ||> Map.fold (fun s k _ -> s + k)
 
-    [<Benchmark>]
-    member x.``MapNew_fold``() =
-        (0, mapNew) ||> MapNew.fold (fun s k _ -> s + k)
+    //[<Benchmark>]
+    //member x.``MapNew_fold``() =
+    //    (0, mapNew) ||> MapNew.fold (fun s k _ -> s + k)
 
         
 

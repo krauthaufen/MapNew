@@ -43,7 +43,7 @@ module MapNewImplementation =
         abstract member WithMin : comparer : IComparer<'Key> * min : 'Key * minInclusive : bool -> Node<'Key, 'Value>
         abstract member WithMax : comparer : IComparer<'Key> * max : 'Key * maxInclusive : bool -> Node<'Key, 'Value>
 
-
+    [<Sealed>]
     type MapEmpty<'Key, 'Value> private() =
         inherit Node<'Key, 'Value>()
 
@@ -96,7 +96,9 @@ module MapNewImplementation =
         override x.WithMax(_comparer : IComparer<'Key>, _max : 'Key, _maxInclusive : bool) =
             x :> Node<_,_>
 
-    and MapLeaf<'Key, 'Value> =
+    and 
+        [<Sealed>]
+        MapLeaf<'Key, 'Value> =
         class 
             inherit Node<'Key, 'Value>
             val mutable public Key : 'Key
@@ -112,19 +114,35 @@ module MapNewImplementation =
                 let c = comparer.Compare(key, x.Key)
 
                 if c > 0 then
-                    MapNode(x, key, value, MapEmpty.Instance) :> Node<'Key,'Value>
+                    #if TWO
+                    MapTwo(x.Key, x.Value, key, value) :> Node<'Key,'Value>
+                    #else
+                    MapInner(x, key, value, MapEmpty.Instance) :> Node<'Key,'Value>
+                    #endif
                 elif c < 0 then
-                    MapNode(MapEmpty.Instance, key, value, x) :> Node<'Key,'Value>
+                    #if TWO
+                    MapTwo(key, value, x.Key, x.Value) :> Node<'Key,'Value>
+                    #else
+                    MapInner(MapEmpty.Instance, key, value, x) :> Node<'Key,'Value>
+                    #endif
                 else
                     MapLeaf(key, value) :> Node<'Key,'Value>
                     
             override x.AddInPlace(comparer, key, value) =
                 let c = comparer.Compare(key, x.Key)
 
-                if c > 0 then
-                    MapNode(x, key, value, MapEmpty.Instance) :> Node<'Key,'Value>
+                if c > 0 then   
+                    #if TWO
+                    MapTwo(x.Key, x.Value, key, value) :> Node<'Key,'Value>
+                    #else
+                    MapInner(x, key, value, MapEmpty.Instance) :> Node<'Key,'Value>
+                    #endif
                 elif c < 0 then
-                    MapNode(MapEmpty.Instance, key, value, x) :> Node<'Key,'Value>
+                    #if TWO
+                    MapTwo(key, value, x.Key, x.Value) :> Node<'Key,'Value>
+                    #else
+                    MapInner(MapEmpty.Instance, key, value, x) :> Node<'Key,'Value>
+                    #endif
                 else
                     x.Key <- key
                     x.Value <- value
@@ -242,7 +260,245 @@ module MapNewImplementation =
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
 
-    and MapNode<'Key, 'Value> =
+    #if TWO
+    and 
+        [<Sealed>]
+        MapTwo<'Key, 'Value> =
+            inherit Node<'Key, 'Value>
+            val mutable public K0 : 'Key
+            val mutable public V0 : 'Value
+            val mutable public K1 : 'Key
+            val mutable public V1 : 'Value
+
+            override x.Height =
+                1
+
+            override x.Count =
+                2
+
+            override x.Add(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
+                let c0 = comparer.Compare(key, x.K0)
+                let c1 = comparer.Compare(key, x.K1)
+
+                if c0 > 0 && c1 > 0 then
+                    MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
+                elif c0 > 0 && c1 < 0 then
+                    MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 < 0 && c1 < 0 then
+                    MapInner(MapLeaf(key, value), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 = 0 then
+                    MapTwo(key, value, x.K1, x.V1) :> Node<_,_>
+                elif c1 = 0 then
+                    MapTwo(x.K0, x.V0, key, value) :> Node<_,_>
+                else
+                    failwith "inconsistent"
+                    
+            override x.Remove(comparer : IComparer<'Key>, key : 'Key) =
+                let c0 = comparer.Compare(key, x.K0)
+                let c1 = comparer.Compare(key, x.K1)
+
+                if c0 = 0 then MapLeaf(x.K1, x.V1) :> Node<_,_>
+                elif c1 = 0 then MapLeaf(x.K0, x.V0) :> Node<_,_>
+                else x :> Node<_,_>
+               
+            override x.AddInPlace(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
+                let c0 = comparer.Compare(key, x.K0)
+                let c1 = comparer.Compare(key, x.K1)
+
+                if c0 > 0 && c1 > 0 then
+                    MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
+                elif c0 > 0 && c1 < 0 then
+                    MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 < 0 && c1 < 0 then
+                    MapInner(MapLeaf(key, value), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 = 0 then
+                    x.K1 <- key
+                    x.V1 <- value
+                    x :> Node<_,_>
+                elif c1 = 0 then
+                    x.K0 <- key
+                    x.V0 <- value
+                    x :> Node<_,_>
+                else
+                    failwith "inconsistent"
+
+            override x.Map(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T>) =
+                MapTwo(x.K0, mapping.Invoke(x.K0, x.V0), x.K1, mapping.Invoke(x.K1, x.V1)) :> Node<_,_>
+                
+            override x.Choose(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, option<'T>>) =
+                match mapping.Invoke(x.K0, x.V0) with
+                | Some v0 ->
+                    match mapping.Invoke(x.K1, x.V1) with
+                    | Some v1 -> 
+                        MapTwo(x.K0, v0, x.K1, v1) :> Node<_,_>
+                    | None ->
+                        MapLeaf(x.K0, v0) :> Node<_,_>
+                | None ->
+                    match mapping.Invoke(x.K1, x.V1) with
+                    | Some v1 -> 
+                        MapLeaf(x.K1, v1) :> Node<_,_>
+                    | None ->
+                        MapEmpty.Instance
+                        
+            override x.ChooseV(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) =
+                match mapping.Invoke(x.K0, x.V0) with
+                | ValueSome v0 ->
+                    match mapping.Invoke(x.K1, x.V1) with
+                    | ValueSome v1 -> 
+                        MapTwo(x.K0, v0, x.K1, v1) :> Node<_,_>
+                    | ValueNone ->
+                        MapLeaf(x.K0, v0) :> Node<_,_>
+                | ValueNone ->
+                    match mapping.Invoke(x.K1, x.V1) with
+                    | ValueSome v1 -> 
+                        MapLeaf(x.K1, v1) :> Node<_,_>
+                    | ValueNone ->
+                        MapEmpty.Instance
+
+            override x.Filter(predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool>) =
+                if predicate.Invoke(x.K0, x.V0) then
+                    if predicate.Invoke(x.K1, x.V1) then
+                        MapTwo(x.K0, x.V0, x.K1, x.V1) :> Node<_,_>
+                    else
+                        MapLeaf(x.K0, x.V0) :> Node<_,_>
+                else
+                    if predicate.Invoke(x.K1, x.V1) then
+                        MapLeaf(x.K1, x.V1) :> Node<_,_>
+                    else
+                        MapEmpty.Instance
+                 
+            override x.ContainsKey(comparer : IComparer<'Key>, key : 'Key) =
+                let c0 = comparer.Compare(key, x.K0)
+                if c0 > 0 then comparer.Compare(key, x.K1) = 0
+                else c0 = 0
+                
+            override x.TryFind(comparer : IComparer<'Key>, key : 'Key) =
+                let c0 = comparer.Compare(key, x.K0)
+                if c0 > 0 then 
+                    if comparer.Compare(key, x.K1) = 0 then Some x.V1
+                    else None
+                elif c0 = 0 then
+                    Some x.V0
+                else
+                    None
+                    
+            override x.TryFindV(comparer : IComparer<'Key>, key : 'Key) =
+                let c0 = comparer.Compare(key, x.K0)
+                if c0 > 0 then 
+                    if comparer.Compare(key, x.K1) = 0 then ValueSome x.V1
+                    else ValueNone
+                elif c0 = 0 then
+                    ValueSome x.V0
+                else
+                    ValueNone
+
+            override x.ToList(acc) =
+                (x.K0, x.V0) :: (x.K1, x.V1) :: acc
+
+            override x.ToListV(acc) =
+                struct(x.K0, x.V0) :: struct(x.K1, x.V1) :: acc
+
+            override x.TryRemoveHeadV() =
+                ValueSome struct(x.K0, x.V0, MapLeaf(x.K1, x.V1) :> Node<_,_>)
+
+            override x.TryRemoveTailV() =
+                ValueSome struct(MapLeaf(x.K0, x.V0) :> Node<_,_>, x.K1, x.V1)
+                
+            override x.UnsafeRemoveHeadV() =
+                struct(x.K0, x.V0, MapLeaf(x.K1, x.V1) :> Node<_,_>)
+
+            override x.UnsafeRemoveTailV() =
+                struct(MapLeaf(x.K0, x.V0) :> Node<_,_>, x.K1, x.V1)
+
+            override x.CopyTo(dst : ('Key * 'Value)[], index : int) =
+                dst.[index] <- (x.K0, x.V0)
+                dst.[index + 1] <- (x.K1, x.V1)
+                index + 2
+
+            override x.CopyToV(dst : struct('Key * 'Value)[], index : int) =
+                dst.[index] <- struct(x.K0, x.V0)
+                dst.[index + 1] <- struct(x.K1, x.V1)
+                index + 2
+
+            override x.CopyToKeyValue(dst : KeyValuePair<'Key, 'Value>[], index : int) =
+                dst.[index] <- KeyValuePair(x.K0, x.V0)
+                dst.[index + 1] <- KeyValuePair(x.K1, x.V1)
+                index + 2
+
+            override x.Exists(predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool>) =
+                predicate.Invoke(x.K0, x.V0) ||
+                predicate.Invoke(x.K1, x.V1)
+                
+            override x.Forall(predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool>) =
+                predicate.Invoke(x.K0, x.V0) &&
+                predicate.Invoke(x.K1, x.V1)
+                
+            override x.Fold(folder : OptimizedClosures.FSharpFunc<'State, 'Key, 'Value, 'State>, seed : 'State) =
+                folder.Invoke(folder.Invoke(seed, x.K0, x.V0), x.K1, x.V1)
+                
+            override x.FoldBack(folder : OptimizedClosures.FSharpFunc<'Key, 'Value, 'State, 'State>, seed : 'State) =
+                folder.Invoke(x.K0, x.V0, folder.Invoke(x.K1, x.V1, seed))
+                
+            override x.Iter(action : OptimizedClosures.FSharpFunc<'Key, 'Value, unit>) =
+                action.Invoke(x.K0, x.V0)
+                action.Invoke(x.K1, x.V1)
+
+            override x.GetViewBetween(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool, max : 'Key, maxInclusive : bool) =
+                let l0 = comparer.Compare(min, x.K0)
+                let h1 = comparer.Compare(max, x.K1)
+                let lower0 = if minInclusive then l0 >= 0 else l0 > 0
+                let upper1 = if maxInclusive then h1 <= 0 else h1 < 0
+
+                if lower0 && upper1 then 
+                    x :> Node<_,_>
+                elif lower0 then
+                    let h0 = comparer.Compare(max, x.K0)
+                    let upper0 = if maxInclusive then h0 <= 0 else h0 < 0
+                    if upper0 then 
+                        MapLeaf(x.K0, x.V0) :> Node<_,_>
+                    else    
+                        MapEmpty.Instance
+                elif upper1 then
+                    let l1 = comparer.Compare(min, x.K1)
+                    let lower1 = if minInclusive then l1 >= 0 else l1 > 0
+                    if lower1 then
+                        MapLeaf(x.K1, x.V1) :> Node<_,_>
+                    else
+                        MapEmpty.Instance
+                else    
+                    MapEmpty.Instance
+                    
+                    
+            override x.WithMin(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool) =
+                let l0 = comparer.Compare(min, x.K0)
+                let lower0 = if minInclusive then l0 <= 0 else l0 < 0
+                if lower0 then 
+                    x :> Node<_,_>
+                else
+                    let l1 = comparer.Compare(min, x.K1)
+                    let lower1 = if minInclusive then l1 <= 0 else l1 < 0
+                    if lower1 then MapLeaf(x.K1, x.V1) :> Node<_,_>
+                    else MapEmpty.Instance
+                    
+            override x.WithMax(comparer : IComparer<'Key>, max : 'Key, maxInclusive : bool) =
+                let h1 = comparer.Compare(max, x.K1)
+                let upper1 = if maxInclusive then h1 >= 0 else h1 >0
+                if upper1 then 
+                    x :> Node<_,_>
+                else
+                    let h0 = comparer.Compare(max, x.K0)
+                    let upper0 = if maxInclusive then h0 >= 0 else h0 > 0
+                    if upper0 then MapLeaf(x.K0, x.V0) :> Node<_,_>
+                    else MapEmpty.Instance
+                    
+
+
+            new(k0 : 'Key, v0 : 'Value, k1 : 'Key, v1 : 'Value) =
+                { K0 = k0; V0 = v0; K1 = k1; V1 = v1 }
+    #endif
+
+    and [<Sealed>]
+        MapInner<'Key, 'Value> =
         class 
             inherit Node<'Key, 'Value>
 
@@ -256,77 +512,92 @@ module MapNewImplementation =
             static member Create(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 let lh = l.Height
                 let rh = r.Height
-
                 let b = rh - lh
+
+                let cnt = l.Count + r.Count + 1
+
+                #if TWO
+                if cnt <= 2 then
+                    match l with
+                    | :? MapLeaf<'Key, 'Value> as l ->
+                        MapTwo(l.Key, l.Value, k, v) :> Node<_,_>
+                    | _ ->
+                        match r with
+                        | :? MapLeaf<'Key, 'Value> as r ->
+                            MapTwo(k, v, r.Key, r.Value) :> Node<_,_>
+                        | _ ->
+                            MapLeaf(k, v) :> Node<_,_>
+                #else
                 if lh = 0 && rh = 0 then
                     MapLeaf(k, v) :> Node<_,_>
+                #endif
                 elif b > 2 then
                     // right heavy
-                    let r = r :?> MapNode<'Key, 'Value> // must work
+                    let r = r :?> MapInner<'Key, 'Value> // must work
                     
                     if r.Right.Height >= r.Left.Height then
                         // right right case
-                        MapNode.Create(
-                            MapNode.Create(l, k, v, r.Left),
+                        MapInner.Create(
+                            MapInner.Create(l, k, v, r.Left),
                             r.Key, r.Value,
                             r.Right
                         ) 
                     else
                         // right left case
                         match r.Left with
-                        | :? MapNode<'Key, 'Value> as rl ->
-                            //let rl = r.Left :?> MapNode<'Key, 'Value>
+                        | :? MapInner<'Key, 'Value> as rl ->
+                            //let rl = r.Left :?> MapInner<'Key, 'Value>
                             let t1 = l
                             let t2 = rl.Left
                             let t3 = rl.Right
                             let t4 = r.Right
 
-                            MapNode.Create(
-                                MapNode.Create(t1, k, v, t2),
+                            MapInner.Create(
+                                MapInner.Create(t1, k, v, t2),
                                 rl.Key, rl.Value,
-                                MapNode.Create(t3, r.Key, r.Value, t4)
+                                MapInner.Create(t3, r.Key, r.Value, t4)
                             )
                         | _ ->
                             failwith "impossible"
                             
 
                 elif b < -2 then   
-                    let l = l :?> MapNode<'Key, 'Value> // must work
+                    let l = l :?> MapInner<'Key, 'Value> // must work
                     
                     if l.Left.Height >= l.Right.Height then
-                        MapNode.Create(
+                        MapInner.Create(
                             l.Left,
                             l.Key, l.Value,
-                            MapNode.Create(l.Right, k, v, r)
+                            MapInner.Create(l.Right, k, v, r)
                         )
 
                     else
                         match l.Right with
-                        | :? MapNode<'Key, 'Value> as lr -> 
+                        | :? MapInner<'Key, 'Value> as lr -> 
                             let t1 = l.Left
                             let t2 = lr.Left
                             let t3 = lr.Right
                             let t4 = r
-                            MapNode.Create(
-                                MapNode.Create(t1, l.Key, l.Value, t2),
+                            MapInner.Create(
+                                MapInner.Create(t1, l.Key, l.Value, t2),
                                 lr.Key, lr.Value,
-                                MapNode.Create(t3, k, v, t4)
+                                MapInner.Create(t3, k, v, t4)
                             )
                         | _ ->
                             failwith "impossible"
 
                 else
-                    MapNode(l, k, v, r) :> Node<_,_>
+                    MapInner(l, k, v, r) :> Node<_,_>
 
             static member Join(l : Node<'Key, 'Value>, r : Node<'Key, 'Value>) =
                 if l.Height = 0 then r
                 elif r.Height = 0 then l
                 elif l.Height > r.Height then
                     let struct(l1, k, v) = l.UnsafeRemoveTailV()
-                    MapNode.Create(l1, k, v, r)
+                    MapInner.Create(l1, k, v, r)
                 else
                     let struct(k, v, r1) = r.UnsafeRemoveHeadV()
-                    MapNode.Create(l, k, v, r1)
+                    MapInner.Create(l, k, v, r1)
 
             override x.Count =
                 x._Count
@@ -337,19 +608,19 @@ module MapNewImplementation =
             override x.Add(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left, 
                         x.Key, x.Value,
                         x.Right.Add(comparer, key, value)
                     )
                 elif c < 0 then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left.Add(comparer, key, value), 
                         x.Key, x.Value,
                         x.Right
                     )
                 else
-                    MapNode(
+                    MapInner(
                         x.Left, 
                         key, value,
                         x.Right
@@ -366,7 +637,7 @@ module MapNewImplementation =
                         x._Count <- 1 + x.Right.Count + x.Left.Count
                         x :> Node<_,_>
                     else 
-                        MapNode.Create(
+                        MapInner.Create(
                             x.Left, 
                             x.Key, x.Value,
                             x.Right
@@ -380,7 +651,7 @@ module MapNewImplementation =
                         x._Count <- 1 + x.Right.Count + x.Left.Count
                         x :> Node<_,_>
                     else
-                        MapNode.Create(
+                        MapInner.Create(
                             x.Left, 
                             x.Key, x.Value,
                             x.Right
@@ -393,19 +664,19 @@ module MapNewImplementation =
             override x.Remove(comparer : IComparer<'Key>, key : 'Key) =
                 let c = comparer.Compare(key, x.Key)
                 if c > 0 then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left, 
                         x.Key, x.Value,
                         x.Right.Remove(comparer, key)
                     )
                 elif c < 0 then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left.Remove(comparer, key), 
                         x.Key, x.Value,
                         x.Right
                     )
                 else
-                    MapNode.Join(x.Left, x.Right)
+                    MapInner.Join(x.Left, x.Right)
 
             override x.Iter(action : OptimizedClosures.FSharpFunc<'Key, 'Value, unit>) =
                 x.Left.Iter(action)
@@ -413,7 +684,7 @@ module MapNewImplementation =
                 x.Right.Iter(action)
                 
             override x.Map(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T>) =
-                MapNode(
+                MapInner(
                     x.Left.Map(mapping),
                     x.Key, mapping.Invoke(x.Key, x.Value),
                     x.Right.Map(mapping)
@@ -425,9 +696,9 @@ module MapNewImplementation =
                 let r = x.Right.Filter(predicate)
 
                 if self then
-                    MapNode.Create(l, x.Key, x.Value, r)
+                    MapInner.Create(l, x.Key, x.Value, r)
                 else
-                    MapNode.Join(l, r)
+                    MapInner.Join(l, r)
 
             override x.Choose(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, option<'T>>) =
                 let l = x.Left.Choose(mapping)
@@ -435,9 +706,9 @@ module MapNewImplementation =
                 let r = x.Right.Choose(mapping)
                 match self with
                 | Some value ->
-                    MapNode.Create(l, x.Key, value, r)
+                    MapInner.Create(l, x.Key, value, r)
                 | None ->
-                    MapNode.Join(l, r)
+                    MapInner.Join(l, r)
                     
 
             override x.ChooseV(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) =
@@ -446,9 +717,9 @@ module MapNewImplementation =
                 let r = x.Right.ChooseV(mapping)
                 match self with
                 | ValueSome value ->
-                    MapNode.Create(l, x.Key, value, r)
+                    MapInner.Create(l, x.Key, value, r)
                 | ValueNone ->
-                    MapNode.Join(l, r)
+                    MapInner.Join(l, r)
                     
             override x.Exists(predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool>) =
                 x.Left.Exists(predicate) ||
@@ -512,14 +783,14 @@ module MapNewImplementation =
             override x.TryRemoveHeadV() =
                 match x.Left.TryRemoveHeadV() with
                 | ValueSome struct(k, v, l1) ->
-                    ValueSome (struct(k, v, MapNode.Create(l1, x.Key, x.Value, x.Right)))
+                    ValueSome (struct(k, v, MapInner.Create(l1, x.Key, x.Value, x.Right)))
                 | ValueNone ->
                     ValueSome (struct(x.Key, x.Value, x.Right))
 
             override x.TryRemoveTailV() =   
                 match x.Right.TryRemoveTailV() with
                 | ValueSome struct(r1, k, v) ->
-                    ValueSome struct(MapNode.Create(x.Left, x.Key, x.Value, r1), k, v)
+                    ValueSome struct(MapInner.Create(x.Left, x.Key, x.Value, r1), k, v)
                 | ValueNone ->
                     ValueSome struct(x.Left, x.Key, x.Value)
                     
@@ -528,21 +799,21 @@ module MapNewImplementation =
                     struct(x.Key, x.Value, x.Right)
                 else
                     let struct(k,v,l1) = x.Left.UnsafeRemoveHeadV()
-                    struct(k, v, MapNode.Create(l1, x.Key, x.Value, x.Right))
+                    struct(k, v, MapInner.Create(l1, x.Key, x.Value, x.Right))
 
             override x.UnsafeRemoveTailV() =   
                 if x.Right.Height = 0 then
                     struct(x.Left, x.Key, x.Value)
                 else
                     let struct(r1,k,v) = x.Right.UnsafeRemoveTailV()
-                    struct(MapNode.Create(x.Left, x.Key, x.Value, r1), k, v)
+                    struct(MapInner.Create(x.Left, x.Key, x.Value, r1), k, v)
                     
 
             override x.WithMin(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool) =
                 let c = comparer.Compare(x.Key, min)
                 let greaterMin = if minInclusive then c >= 0 else c > 0
                 if greaterMin then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left.WithMin(comparer, min, minInclusive),
                         x.Key, x.Value,
                         x.Right
@@ -555,7 +826,7 @@ module MapNewImplementation =
                 let c = comparer.Compare(x.Key, max)
                 let smallerMax = if maxInclusive then c <= 0 else c < 0
                 if smallerMax then
-                    MapNode.Create(
+                    MapInner.Create(
                         x.Left,
                         x.Key, x.Value,
                         x.Right.WithMax(comparer, max, maxInclusive)
@@ -581,17 +852,17 @@ module MapNewImplementation =
                 elif greaterMin && smallerMax then
                     let l = x.Left.WithMin(comparer, min, minInclusive)
                     let r = x.Right.WithMax(comparer, max, maxInclusive)
-                    MapNode.Create(l, x.Key, x.Value, r)
+                    MapInner.Create(l, x.Key, x.Value, r)
 
                 elif greaterMin then
                     let l = x.Left.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
                     let r = x.Right.WithMax(comparer, max, maxInclusive)
-                    MapNode.Create(l, x.Key, x.Value, r)
+                    MapInner.Create(l, x.Key, x.Value, r)
 
                 elif smallerMax then
                     let l = x.Left.WithMin(comparer, min, minInclusive)
                     let r = x.Right.GetViewBetween(comparer, min, minInclusive, max, maxInclusive)
-                    MapNode.Create(l, x.Key, x.Value, r)
+                    MapInner.Create(l, x.Key, x.Value, r)
                     
                 else
                     failwith ""
@@ -818,7 +1089,7 @@ and MapNewEnumerator<'Key, 'Value> =
             x.Stack <- []
             x.Value <- Unchecked.defaultof<_>
                 
-        member inline private x.MoveNext(top : Node<'Key, 'Value>) =
+        member inline private x.MoveNext(deep : bool, top : Node<'Key, 'Value>) =
             let mutable top = top
             let mutable run = true
 
@@ -828,15 +1099,30 @@ and MapNewEnumerator<'Key, 'Value> =
                     x.Value <- KeyValuePair(n.Key, n.Value)
                     run <- false
 
-                | :? MapNode<'Key, 'Value> as n ->
-                    if n.Left.Height = 0 then
-                        if n.Right.Height > 0 then x.Stack <- struct(n.Right, true) :: x.Stack
+                | :? MapInner<'Key, 'Value> as n ->
+                    if deep then
+                        if n.Left.Height = 0 then
+                            if n.Right.Height > 0 then x.Stack <- struct(n.Right, true) :: x.Stack
+                            x.Value <- KeyValuePair(n.Key, n.Value)
+                            run <- false
+                        else
+                            if n.Right.Height > 0 then x.Stack <- struct(n.Right, true) :: x.Stack
+                            x.Stack <- struct(n :> Node<_,_>, false) :: x.Stack
+                            top <- n.Left
+                    else    
                         x.Value <- KeyValuePair(n.Key, n.Value)
                         run <- false
-                    else
-                        if n.Right.Height > 0 then x.Stack <- struct(n.Right, true) :: x.Stack
+
+                #if TWO
+                | :? MapTwo<'Key, 'Value> as n ->
+                    if deep then
+                        x.Value <- KeyValuePair(n.K0, n.V0)
                         x.Stack <- struct(n :> Node<_,_>, false) :: x.Stack
-                        top <- n.Left
+                        run <- false
+                    else
+                        x.Value <- KeyValuePair(n.K1, n.V1)
+                        run <- false
+                #endif
                 | _ ->
                     failwith "empty node"
     
@@ -845,20 +1131,8 @@ and MapNewEnumerator<'Key, 'Value> =
             match x.Stack with
             | struct(n, deep) :: rest ->
                 x.Stack <- rest
-                match n with
-                | :? MapLeaf<'Key, 'Value> as n ->
-                    x.Value <- KeyValuePair(n.Key, n.Value)
-                    true
-
-                | :? MapNode<'Key, 'Value> as n ->
-                    if deep then
-                        x.MoveNext n
-                        true
-                    else
-                        x.Value <- KeyValuePair(n.Key, n.Value)
-                        true
-                | _ ->
-                    false
+                x.MoveNext(deep, n)
+                true
             | [] ->
                 false
                             
