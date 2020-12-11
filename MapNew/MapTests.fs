@@ -223,6 +223,7 @@ let tests =
             let n1 = mn |> MapNew.remove k |> MapNew.change k  (function None -> Some 123 | Some o -> None)
             identical n1 m1
         )
+
         testProperty "withRange" (fun (m : Map<int, int>) ->
             let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
             let arr = Map.toArray m
@@ -235,6 +236,29 @@ let tests =
             let a = MapNew.withRange l h mn
             let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
             identical a b
+        )
+        testProperty "tryAt" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let arr = m |> Map.toArray
+
+            let inline tup v =
+                match v with
+                | ValueSome struct(a,b) -> Some(a,b)
+                | ValueNone -> None
+
+            for i in -1 .. arr.Length do
+                mn 
+                |> MapNew.tryAt i 
+                |> should equal (Array.tryItem i arr)
+
+                mn 
+                |> MapNew.tryAtV i 
+                |> tup
+                |> should equal (Array.tryItem i arr)
+
+
         )
 
     ]

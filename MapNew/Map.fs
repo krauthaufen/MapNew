@@ -48,6 +48,9 @@ module MapNewImplementation =
         abstract member TryMinKeyValueV : unit -> voption<struct('Key * 'Value)>
         abstract member TryMaxKeyValueV : unit -> voption<struct('Key * 'Value)>
         
+        abstract member TryAt : index : int -> option<'Key * 'Value>
+        abstract member TryAtV : index : int -> voption<struct('Key * 'Value)>
+
         abstract member Change : comparer : IComparer<'Key> * key : 'Key * (option<'Value> -> option<'Value>) -> Node<'Key, 'Value>
         abstract member ChangeV : comparer : IComparer<'Key> * key : 'Key * (voption<'Value> -> voption<'Value>) -> Node<'Key, 'Value>
 
@@ -118,6 +121,9 @@ module MapNewImplementation =
             match update ValueNone with
             | ValueNone -> x :> Node<_,_>
             | ValueSome v -> MapLeaf(key, v) :> Node<_,_>
+
+        override x.TryAt(_index) = None
+        override x.TryAtV(_index) = ValueNone
 
     and 
         [<Sealed>]
@@ -341,6 +347,13 @@ module MapNewImplementation =
                     | ValueNone ->
                         MapEmpty.Instance
 
+            override x.TryAt(index) =
+                if index = 0 then Some (x.Key, x.Value)
+                else None
+
+            override x.TryAtV(index) =
+                if index = 0 then ValueSome struct(x.Key, x.Value)
+                else ValueNone
 
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
@@ -1024,6 +1037,20 @@ module MapNewImplementation =
                     | ValueNone ->
                         MapInner.Join(x.Left, x.Right)
 
+                        
+            override x.TryAt(index) =
+                let lc = index - x.Left.Count
+                if lc < 0 then x.Left.TryAt(index)
+                elif lc > 0 then x.Right.TryAt(lc - 1)
+                else Some (x.Key, x.Value)
+                
+            override x.TryAtV(index) =
+                let lc = index - x.Left.Count
+                if lc < 0 then x.Left.TryAtV(index)
+                elif lc > 0 then x.Right.TryAtV(lc - 1)
+                else ValueSome struct(x.Key, x.Value)
+
+
             new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 assert(l.Height > 0 || r.Height > 0)    // not both empty
                 assert(abs (r.Height - l.Height) <= 2)   // balanced
@@ -1188,6 +1215,14 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         
     member x.ChangeV(key : 'Key, update : voption<'Value> -> voption<'Value>) =
         MapNew(comparer, root.ChangeV(comparer, key, update))
+
+    member x.TryAt(index : int) =
+        if index < 0 || index >= root.Count then None
+        else root.TryAt index
+        
+    member x.TryAtV(index : int) =
+        if index < 0 || index >= root.Count then ValueNone
+        else root.TryAtV index
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = new MapNewEnumerator<_,_>(root) :> _
@@ -1472,3 +1507,9 @@ module MapNew =
 
     [<CompiledName("TryMinValue")>]
     let inline tryMinV (map : MapNew<'Key, 'Value>) = map.TryMinKeyValueV()
+    
+    [<CompiledName("TryAt")>]
+    let inline tryAt (index : int) (map : MapNew<'Key, 'Value>) = map.TryAt index
+    
+    [<CompiledName("TryAtValue")>]
+    let inline tryAtV (index : int) (map : MapNew<'Key, 'Value>) = map.TryAtV index
