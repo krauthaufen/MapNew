@@ -47,6 +47,9 @@ module MapNewImplementation =
         abstract member TryMaxKeyValue : unit -> option<'Key * 'Value>
         abstract member TryMinKeyValueV : unit -> voption<struct('Key * 'Value)>
         abstract member TryMaxKeyValueV : unit -> voption<struct('Key * 'Value)>
+        
+        abstract member Change : comparer : IComparer<'Key> * key : 'Key * (option<'Value> -> option<'Value>) -> Node<'Key, 'Value>
+        abstract member ChangeV : comparer : IComparer<'Key> * key : 'Key * (voption<'Value> -> voption<'Value>) -> Node<'Key, 'Value>
 
     [<Sealed>]
     type MapEmpty<'Key, 'Value> private() =
@@ -105,6 +108,16 @@ module MapNewImplementation =
         override x.TryMaxKeyValue() = None
         override x.TryMinKeyValueV() = ValueNone
         override x.TryMaxKeyValueV() = ValueNone
+
+        override x.Change(comparer, key, update) =
+            match update None with
+            | None -> x :> Node<_,_>
+            | Some v -> MapLeaf(key, v) :> Node<_,_>
+            
+        override x.ChangeV(comparer, key, update) =
+            match update ValueNone with
+            | ValueNone -> x :> Node<_,_>
+            | ValueSome v -> MapLeaf(key, v) :> Node<_,_>
 
     and 
         [<Sealed>]
@@ -272,6 +285,62 @@ module MapNewImplementation =
             override x.TryMaxKeyValue() = Some(x.Key, x.Value)
             override x.TryMinKeyValueV() = ValueSome struct(x.Key, x.Value)
             override x.TryMaxKeyValueV() = ValueSome struct(x.Key, x.Value)
+
+            
+            override x.Change(comparer, key, update) =
+                let c = comparer.Compare(key, x.Key)
+                if c > 0 then
+                    match update None with
+                    | None -> x :> Node<_,_>
+                    | Some v ->
+                        #if TWO
+                        MapTwo(x.Key, x.Value, key, v) :> Node<_,_>
+                        #else
+                        MapInner(x, key, v, MapEmpty.Instance) :> Node<_,_>
+                        #endif
+                elif c < 0 then
+                    match update None with
+                    | None -> x :> Node<_,_>
+                    | Some v ->
+                        #if TWO
+                        MapTwo(key, v, x.Key, x.Value) :> Node<_,_>
+                        #else
+                        MapInner(MapEmpty.Instance, key, v, x) :> Node<_,_>
+                        #endif
+                else    
+                    match update (Some x.Value) with
+                    | Some v ->
+                        MapLeaf(key, v) :> Node<_,_>
+                    | None ->
+                        MapEmpty.Instance
+
+            override x.ChangeV(comparer, key, update) =
+                let c = comparer.Compare(key, x.Key)
+                if c > 0 then
+                    match update ValueNone with
+                    | ValueNone -> x :> Node<_,_>
+                    | ValueSome v ->
+                        #if TWO
+                        MapTwo(x.Key, x.Value, key, v) :> Node<_,_>
+                        #else
+                        MapInner(x, key, v, MapEmpty.Instance) :> Node<_,_>
+                        #endif
+                elif c < 0 then
+                    match update ValueNone with
+                    | ValueNone -> x :> Node<_,_>
+                    | ValueSome v ->
+                        #if TWO
+                        MapTwo(key, v, x.Key, x.Value) :> Node<_,_>
+                        #else
+                        MapInner(MapEmpty.Instance, key, v, x) :> Node<_,_>
+                        #endif
+                else    
+                    match update (ValueSome x.Value) with
+                    | ValueSome v ->
+                        MapLeaf(key, v) :> Node<_,_>
+                    | ValueNone ->
+                        MapEmpty.Instance
+
 
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
@@ -904,6 +973,56 @@ module MapNewImplementation =
             override x.TryMaxKeyValueV() = 
                 if x.Right.Count = 0 then ValueSome(x.Key, x.Value)
                 else x.Right.TryMaxKeyValueV()
+                
+            override x.Change(comparer, key, update) =
+                let c = comparer.Compare(key, x.Key)
+                if c > 0 then   
+                    MapInner.Create(
+                        x.Left,
+                        x.Key, x.Value,
+                        x.Right.Change(comparer, key, update)
+                    )
+                elif c < 0 then 
+                    MapInner.Create(
+                        x.Left.Change(comparer, key, update),
+                        x.Key, x.Value,
+                        x.Right
+                    )
+                else    
+                    match update (Some x.Value) with
+                    | Some v ->
+                        MapInner(
+                            x.Left,
+                            key, v,
+                            x.Right
+                        ) :> Node<_,_>
+                    | None ->
+                        MapInner.Join(x.Left, x.Right)
+                        
+            override x.ChangeV(comparer, key, update) =
+                let c = comparer.Compare(key, x.Key)
+                if c > 0 then   
+                    MapInner.Create(
+                        x.Left,
+                        x.Key, x.Value,
+                        x.Right.ChangeV(comparer, key, update)
+                    )
+                elif c < 0 then 
+                    MapInner.Create(
+                        x.Left.ChangeV(comparer, key, update),
+                        x.Key, x.Value,
+                        x.Right
+                    )
+                else    
+                    match update (ValueSome x.Value) with
+                    | ValueSome v ->
+                        MapInner(
+                            x.Left,
+                            key, v,
+                            x.Right
+                        ) :> Node<_,_>
+                    | ValueNone ->
+                        MapInner.Join(x.Left, x.Right)
 
             new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 assert(l.Height > 0 || r.Height > 0)    // not both empty
@@ -1064,6 +1183,11 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     member x.TryMinKeyValueV() = root.TryMinKeyValueV()
     member x.TryMaxKeyValueV() = root.TryMaxKeyValueV()
 
+    member x.Change(key : 'Key, update : option<'Value> -> option<'Value>) =
+        MapNew(comparer, root.Change(comparer, key, update))
+        
+    member x.ChangeV(key : 'Key, update : voption<'Value> -> voption<'Value>) =
+        MapNew(comparer, root.ChangeV(comparer, key, update))
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = new MapNewEnumerator<_,_>(root) :> _
@@ -1242,7 +1366,13 @@ module MapNew =
     
     [<CompiledName("Remove")>]
     let inline remove (key : 'Key) (map : MapNew<'Key, 'Value>) = map.Remove(key)
+
+    [<CompiledName("Change")>]
+    let inline change (key : 'Key) (update : option<'Value> -> option<'Value>) (map : MapNew<'Key, 'Value>) = map.Change(key, update)
     
+    [<CompiledName("ChangeValue")>]
+    let inline changeV (key : 'Key) (update : voption<'Value> -> voption<'Value>) (map : MapNew<'Key, 'Value>) = map.ChangeV(key, update)
+
     [<CompiledName("TryFind")>]
     let inline tryFind (key : 'Key) (map : MapNew<'Key, 'Value>) = map.TryFind(key)
     
@@ -1342,4 +1472,3 @@ module MapNew =
 
     [<CompiledName("TryMinValue")>]
     let inline tryMinV (map : MapNew<'Key, 'Value>) = map.TryMinKeyValueV()
-    

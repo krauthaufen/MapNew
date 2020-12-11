@@ -204,7 +204,25 @@ let tests =
 
             
         )
+        
+        testProperty "change" (fun (m : Map<int, int>) (k : int) ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
 
+            let m1 = m |> Map.change k  (function None -> Some 123 | Some o -> None)
+            let n1 = mn |> MapNew.change k  (function None -> Some 123 | Some o -> None)
+            identical n1 m1
+
+            
+            let m1 = m |> Map.add k k |> Map.change k  (function None -> Some 123 | Some o -> None)
+            let n1 = mn |> MapNew.add k k |> MapNew.change k  (function None -> Some 123 | Some o -> None)
+            identical n1 m1
+
+            
+            let m1 = m |> Map.remove k |> Map.change k  (function None -> Some 123 | Some o -> None)
+            let n1 = mn |> MapNew.remove k |> MapNew.change k  (function None -> Some 123 | Some o -> None)
+            identical n1 m1
+        )
         testProperty "withRange" (fun (m : Map<int, int>) ->
             let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
             let arr = Map.toArray m
