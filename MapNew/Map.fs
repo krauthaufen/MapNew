@@ -43,6 +43,11 @@ module MapNewImplementation =
         abstract member WithMin : comparer : IComparer<'Key> * min : 'Key * minInclusive : bool -> Node<'Key, 'Value>
         abstract member WithMax : comparer : IComparer<'Key> * max : 'Key * maxInclusive : bool -> Node<'Key, 'Value>
 
+        abstract member TryMinKeyValue : unit -> option<'Key * 'Value>
+        abstract member TryMaxKeyValue : unit -> option<'Key * 'Value>
+        abstract member TryMinKeyValueV : unit -> voption<struct('Key * 'Value)>
+        abstract member TryMaxKeyValueV : unit -> voption<struct('Key * 'Value)>
+
     [<Sealed>]
     type MapEmpty<'Key, 'Value> private() =
         inherit Node<'Key, 'Value>()
@@ -95,6 +100,11 @@ module MapNewImplementation =
             x :> Node<_,_>
         override x.WithMax(_comparer : IComparer<'Key>, _max : 'Key, _maxInclusive : bool) =
             x :> Node<_,_>
+
+        override x.TryMinKeyValue() = None
+        override x.TryMaxKeyValue() = None
+        override x.TryMinKeyValueV() = ValueNone
+        override x.TryMaxKeyValueV() = ValueNone
 
     and 
         [<Sealed>]
@@ -256,6 +266,12 @@ module MapNewImplementation =
                     x :> Node<_,_>
                 else
                     MapEmpty.Instance
+
+            
+            override x.TryMinKeyValue() = Some(x.Key, x.Value)
+            override x.TryMaxKeyValue() = Some(x.Key, x.Value)
+            override x.TryMinKeyValueV() = ValueSome struct(x.Key, x.Value)
+            override x.TryMaxKeyValueV() = ValueSome struct(x.Key, x.Value)
 
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
@@ -491,6 +507,11 @@ module MapNewImplementation =
                     if upper0 then MapLeaf(x.K0, x.V0) :> Node<_,_>
                     else MapEmpty.Instance
                     
+                    
+            override x.TryMinKeyValue() = Some(x.K0, x.V0)
+            override x.TryMaxKeyValue() = Some(x.K1, x.V1)
+            override x.TryMinKeyValueV() = ValueSome struct(x.K0, x.V0)
+            override x.TryMaxKeyValueV() = ValueSome struct(x.K1, x.V1)
 
 
             new(k0 : 'Key, v0 : 'Value, k1 : 'Key, v1 : 'Value) =
@@ -866,6 +887,23 @@ module MapNewImplementation =
                     
                 else
                     failwith ""
+                    
+                    
+            override x.TryMinKeyValue() = 
+                if x.Left.Count = 0 then Some(x.Key, x.Value)
+                else x.Left.TryMinKeyValue()
+
+            override x.TryMaxKeyValue() = 
+                if x.Right.Count = 0 then Some(x.Key, x.Value)
+                else x.Right.TryMaxKeyValue()
+                
+            override x.TryMinKeyValueV() = 
+                if x.Left.Count = 0 then ValueSome(x.Key, x.Value)
+                else x.Left.TryMinKeyValueV()
+
+            override x.TryMaxKeyValueV() = 
+                if x.Right.Count = 0 then ValueSome(x.Key, x.Value)
+                else x.Right.TryMaxKeyValueV()
 
             new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
                 assert(l.Height > 0 || r.Height > 0)    // not both empty
@@ -1020,6 +1058,12 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         
     member x.WithMax(maxInclusive : 'Key) = 
         MapNew(comparer, root.WithMax(comparer, maxInclusive, true))
+
+    member x.TryMinKeyValue() = root.TryMinKeyValue()
+    member x.TryMaxKeyValue() = root.TryMaxKeyValue()
+    member x.TryMinKeyValueV() = root.TryMinKeyValueV()
+    member x.TryMaxKeyValueV() = root.TryMaxKeyValueV()
+
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = new MapNewEnumerator<_,_>(root) :> _
@@ -1286,3 +1330,16 @@ module MapNew =
     [<CompiledName("WithRange")>]
     let inline withRange (minInclusive : 'Key) (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.GetViewBetween(minInclusive, maxInclusive)
 
+    
+    [<CompiledName("TryMax")>]
+    let inline tryMax (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValue()
+
+    [<CompiledName("TryMin")>]
+    let inline tryMin (map : MapNew<'Key, 'Value>) = map.TryMinKeyValue()
+
+    [<CompiledName("TryMaxValue")>]
+    let inline tryMaxV (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValueV()
+
+    [<CompiledName("TryMinValue")>]
+    let inline tryMinV (map : MapNew<'Key, 'Value>) = map.TryMinKeyValueV()
+    

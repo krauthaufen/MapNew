@@ -177,6 +177,34 @@ let tests =
             MapNew.count mn |> should equal (Map.count m)
         )
 
+        testProperty "tryMin/tryMax" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let mMin = m |> Seq.tryHead |> Option.map(function KeyValue(k,v) -> k,v)
+            let nMin = MapNew.tryMin mn
+            nMin |> should equal mMin
+
+            let mMax = m |> Seq.tryLast |> Option.map(function KeyValue(k,v) -> k,v)
+            let nMax = MapNew.tryMax mn
+            nMax |> should equal mMax
+
+            let inline toVOption o =
+                match o with
+                | Some(KeyValue(k,v)) -> ValueSome(struct(k,v))
+                | None -> ValueNone
+
+            let mMin = m |> Seq.tryHead |> toVOption
+            let nMin = MapNew.tryMinV mn
+            nMin |> should equal mMin
+
+            let mMax = m |> Seq.tryLast |> toVOption
+            let nMax = MapNew.tryMaxV mn
+            nMax |> should equal mMax
+
+            
+        )
+
         testProperty "withRange" (fun (m : Map<int, int>) ->
             let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
             let arr = Map.toArray m
