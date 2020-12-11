@@ -1250,6 +1250,18 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         elif elements.Length = 1 then
             let (k,v) = elements.[0]
             MapNew(defaultComparer, MapLeaf(k, v))
+            
+        elif elements.Length = 2 then
+            let (k0,v0) = elements.[0]
+            let (k1,v1) = elements.[0]
+            let cmp = defaultComparer
+            let c = cmp.Compare(k0, k1)
+            if c > 0 then
+                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+            elif c < 0 then
+                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+            else
+                MapNew(cmp, MapLeaf(k1, v1))
 
         else
             let cmp = defaultComparer
@@ -1264,6 +1276,19 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         elif elements.Length = 1 then
             let struct(k,v) = elements.[0]
             MapNew(defaultComparer, MapLeaf(k, v))
+        
+        elif elements.Length = 2 then
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[0]
+            let cmp = defaultComparer
+            let c = cmp.Compare(k0, k1)
+            if c > 0 then
+                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+            elif c < 0 then
+                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+            else
+                MapNew(cmp, MapLeaf(k1, v1))
+
         else
             let cmp = defaultComparer
             let arr = Array.copy elements
