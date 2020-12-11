@@ -53,7 +53,7 @@ module MapNewImplementation =
 
         abstract member Change : comparer : IComparer<'Key> * key : 'Key * (option<'Value> -> option<'Value>) -> Node<'Key, 'Value>
         abstract member ChangeV : comparer : IComparer<'Key> * key : 'Key * (voption<'Value> -> voption<'Value>) -> Node<'Key, 'Value>
-
+        
     [<Sealed>]
     type MapEmpty<'Key, 'Value> private() =
         inherit Node<'Key, 'Value>()
@@ -565,8 +565,7 @@ module MapNewImplementation =
                         MapEmpty.Instance
                 else    
                     MapEmpty.Instance
-                    
-                    
+    
             override x.WithMin(comparer : IComparer<'Key>, min : 'Key, minInclusive : bool) =
                 let l0 = comparer.Compare(min, x.K0)
                 let lower0 = if minInclusive then l0 <= 0 else l0 < 0
@@ -594,6 +593,75 @@ module MapNewImplementation =
             override x.TryMaxKeyValue() = Some(x.K1, x.V1)
             override x.TryMinKeyValueV() = ValueSome struct(x.K0, x.V0)
             override x.TryMaxKeyValueV() = ValueSome struct(x.K1, x.V1)
+
+            override x.TryAt(index : int) =
+                if index = 0 then Some(x.K0, x.V0)
+                elif index = 1 then Some(x.K1, x.V1)
+                else None
+                
+            override x.TryAtV(index : int) =
+                if index = 0 then ValueSome struct(x.K0, x.V0)
+                elif index = 1 then ValueSome struct(x.K1, x.V1)
+                else ValueNone
+
+            override x.Change(comparer : IComparer<'Key>, key : 'Key, update : option<'Value> -> option<'Value>) =
+                let c0 = comparer.Compare(key, x.K0)
+                if c0 < 0 then
+                    match update None with
+                    | None -> x :> Node<_,_>
+                    | Some v ->
+                        MapInner(MapLeaf(key, v), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 > 0 then
+                    let c1 = comparer.Compare(key, x.K1)
+                    if c1 < 0 then
+                        match update None with
+                        | None -> x :> Node<_,_> 
+                        | Some v -> 
+                            MapInner(MapLeaf(x.K0, x.V0), key, v, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                    elif c1 > 0 then
+                        match update None with
+                        | None -> x :> Node<_,_> 
+                        | Some v -> 
+                            MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, v)) :> Node<_,_>
+                    else
+                        match update (Some x.V1) with
+                        | None -> MapLeaf(x.K0, x.V0) :> Node<_,_>
+                        | Some v -> MapTwo(x.K0, x.V0, key, v) :> Node<_,_>
+
+                else
+                    match update (Some x.V0) with
+                    | None -> MapLeaf(x.K1, x.V1) :> Node<_,_>
+                    | Some v -> MapTwo(key, v, x.K1, x.V1) :> Node<_,_>
+                    
+
+            override x.ChangeV(comparer : IComparer<'Key>, key : 'Key, update : voption<'Value> -> voption<'Value>) =
+                let c0 = comparer.Compare(key, x.K0)
+                if c0 < 0 then
+                    match update ValueNone with
+                    | ValueNone -> x :> Node<_,_>
+                    | ValueSome v ->
+                        MapInner(MapLeaf(key, v), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                elif c0 > 0 then
+                    let c1 = comparer.Compare(key, x.K1)
+                    if c1 < 0 then
+                        match update ValueNone with
+                        | ValueNone -> x :> Node<_,_> 
+                        | ValueSome v -> 
+                            MapInner(MapLeaf(x.K0, x.V0), key, v, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+                    elif c1 > 0 then
+                        match update ValueNone with
+                        | ValueNone -> x :> Node<_,_> 
+                        | ValueSome v -> 
+                            MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, v)) :> Node<_,_>
+                    else
+                        match update (ValueSome x.V1) with
+                        | ValueNone -> MapLeaf(x.K0, x.V0) :> Node<_,_>
+                        | ValueSome v -> MapTwo(x.K0, x.V0, key, v) :> Node<_,_>
+
+                else
+                    match update (ValueSome x.V0) with
+                    | ValueNone -> MapLeaf(x.K1, x.V1) :> Node<_,_>
+                    | ValueSome v -> MapTwo(key, v, x.K1, x.V1) :> Node<_,_>
 
 
             new(k0 : 'Key, v0 : 'Value, k1 : 'Key, v1 : 'Value) =
