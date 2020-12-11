@@ -8,7 +8,7 @@ open MapNew
 [<PlainExporter; MemoryDiagnoser>]
 type MapBenchmark() =
 
-    [<DefaultValue; Params(10)>]
+    [<DefaultValue; Params(1, 2, 10, 100, 1000)>]
     val mutable public Count : int
 
     let mutable data : (int * int)[] = [||]
@@ -44,68 +44,72 @@ type MapBenchmark() =
         
     [<Benchmark>]
     member x.``MapNew_ofArray``() =
+        MapNew.FromArrayOld data
+
+    [<Benchmark>]
+    member x.``MapNew_ofArray_optimized``() =
         MapNew.ofArray data
 
-    [<Benchmark>]
-    member x.``Map_toArray``() =
-        Map.toArray map
+    //[<Benchmark>]
+    //member x.``Map_toArray``() =
+    //    Map.toArray map
         
-    [<Benchmark>]
-    member x.``MapNew_toArray``() =
-        MapNew.toArray mapNew
+    //[<Benchmark>]
+    //member x.``MapNew_toArray``() =
+    //    MapNew.toArray mapNew
         
     
-    [<Benchmark>]
-    member x.``Map_enumerate``() =
-        let mutable sum = 0
-        for KeyValue(k,_) in map do
-            sum <- sum + k
-        sum
+    //[<Benchmark>]
+    //member x.``Map_enumerate``() =
+    //    let mutable sum = 0
+    //    for KeyValue(k,_) in map do
+    //        sum <- sum + k
+    //    sum
         
-    [<Benchmark>]
-    member x.``MapNew_enumerate``() =
-        let mutable sum = 0
-        for KeyValue(k,_) in mapNew do
-            sum <- sum + k
-        sum
+    //[<Benchmark>]
+    //member x.``MapNew_enumerate``() =
+    //    let mutable sum = 0
+    //    for KeyValue(k,_) in mapNew do
+    //        sum <- sum + k
+    //    sum
         
-    [<Benchmark>]
-    member x.``Map_containsKey_all``() =
-        let mutable res = true
-        for (k, _) in data do
-            res <- Map.containsKey k map && res
-        res
+    //[<Benchmark>]
+    //member x.``Map_containsKey_all``() =
+    //    let mutable res = true
+    //    for (k, _) in data do
+    //        res <- Map.containsKey k map && res
+    //    res
 
-    [<Benchmark>]
-    member x.``MapNew_containsKey_all``() =
-        let mutable res = true
-        for (k, _) in data do
-            res <- mapNew.ContainsKey k && res
-        res
+    //[<Benchmark>]
+    //member x.``MapNew_containsKey_all``() =
+    //    let mutable res = true
+    //    for (k, _) in data do
+    //        res <- mapNew.ContainsKey k && res
+    //    res
 
         
-    [<Benchmark>]
-    member x.``Map_containsKey_nonexisting``() =
-        Map.containsKey toolarge map
+    //[<Benchmark>]
+    //member x.``Map_containsKey_nonexisting``() =
+    //    Map.containsKey toolarge map
         
-    [<Benchmark>]
-    member x.``MapNew_containsKey_nonexisting``() =
-        mapNew.ContainsKey toolarge
+    //[<Benchmark>]
+    //member x.``MapNew_containsKey_nonexisting``() =
+    //    mapNew.ContainsKey toolarge
         
         
-    [<Benchmark>]
-    member x.``Map_remove_all``() =
-        let mutable res = map
-        for (k, _) in data do
-            res <- Map.remove k res
-        res
+    //[<Benchmark>]
+    //member x.``Map_remove_all``() =
+    //    let mutable res = map
+    //    for (k, _) in data do
+    //        res <- Map.remove k res
+    //    res
 
-    [<Benchmark>]
-    member x.``MapNew_remove_all``() =
-        let mutable res = mapNew
-        for (k, _) in data do
-            res <- MapNew.remove k res
-        res
+    //[<Benchmark>]
+    //member x.``MapNew_remove_all``() =
+    //    let mutable res = mapNew
+    //    for (k, _) in data do
+    //        res <- MapNew.remove k res
+    //    res
         
     //[<Benchmark>]
     //member x.``Map_fold``() =

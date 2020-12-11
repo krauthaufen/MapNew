@@ -201,8 +201,6 @@ let tests =
             let mMax = m |> Seq.tryLast |> toVOption
             let nMax = MapNew.tryMaxV mn
             nMax |> should equal mMax
-
-            
         )
         
         testProperty "change" (fun (m : Map<int, int>) (k : int) ->
@@ -237,6 +235,7 @@ let tests =
             let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
             identical a b
         )
+
         testProperty "tryAt" (fun (m : Map<int, int>) ->
             let mn = MapNew.ofSeq (Map.toSeq m)
             identical mn m
@@ -257,8 +256,6 @@ let tests =
                 |> MapNew.tryAtV i 
                 |> tup
                 |> should equal (Array.tryItem i arr)
-
-
         )
 
     ]

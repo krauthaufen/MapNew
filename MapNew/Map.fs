@@ -5,6 +5,46 @@ open System.Collections.Generic
 
 module MapNewImplementation = 
 
+    module Seq =
+        let mapToArray (mapping : 'a -> 'b) (s : seq<'a>) =
+            use e = s.GetEnumerator()
+            if e.MoveNext() then
+                let v0 = mapping e.Current
+                if e.MoveNext() then
+                    let mutable res = Array.zeroCreate 16
+                    let mutable cnt = 2
+                    res.[0] <- v0
+                    res.[1] <- mapping e.Current
+
+                    while e.MoveNext() do
+                        if cnt >= res.Length then System.Array.Resize(&res, res.Length <<< 1)
+                        res.[cnt] <- mapping e.Current
+                        cnt <- cnt + 1
+
+                    if cnt < res.Length then System.Array.Resize(&res, cnt)
+                    res
+                else    
+                    [| v0 |]
+            else
+                [||]
+
+    module List =
+        let mapToArray (mapping : 'a -> 'b) (l : list<'a>) =
+            match l with
+            | [] -> [||]
+            | [a] -> [| mapping a |]
+            | h::l ->
+                let mutable arr = Array.zeroCreate 16
+                arr.[0] <- mapping h
+                let mutable cnt = 1
+                for v in l do
+                    if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                    arr.[cnt] <- mapping v
+                    cnt <- cnt + 1
+
+                if cnt < arr.Length then System.Array.Resize(&arr, cnt)
+                arr
+
     [<AbstractClass>]
     type Node<'Key, 'Value>() =
         abstract member Count : int
@@ -1145,48 +1185,113 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     static member Empty = empty
       
+    static member private FromSortedArray(cmp : IComparer<'Key>, arr : struct('Key * 'Value)[]) =
+        let mutable i = 1
+        let mutable o = 1
+        let mutable struct(lastKey,_) = arr.[0]
+        while i < arr.Length do
+            let struct(k,v) = arr.[i]
+            if cmp.Compare(lastKey, k) = 0 then
+                arr.[o-1] <- struct(k,v)
+            else
+                arr.[o] <- struct(k,v)
+                o <- o + 1
+            i <- i + 1
+
+        let rec create (arr : struct('Key * 'Value)[]) (l : int) (r : int) =
+            if l = r then
+                let struct(k,v) = arr.[l]
+                MapLeaf(k, v) :> Node<_,_>
+            elif l > r then
+                MapEmpty.Instance
+            else
+                let m = (l+r)/2
+                let struct(k,v) = arr.[m]
+                MapInner(
+                    create arr l (m-1),
+                    k, v,
+                    create arr (m+1) r
+                ) :> Node<_,_>
+        MapNew(cmp, create arr 0 (o-1))
+
     static member FromSeq (elements : seq<'Key * 'Value>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
+        let cmp = defaultComparer
+        let arr = elements |> Seq.mapToArray (fun (k,v) -> struct(k,v))
+        if arr.Length <= 0 then
+            MapNew(cmp, MapEmpty.Instance)
+        elif arr.Length = 1 then
+            let struct(k,v) = arr.[0]
+            MapNew(cmp, MapLeaf(k,v))
+        else
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
 
     static member FromList (elements : list<'Key * 'Value>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
+        match elements with
+        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
+        | [(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
+        | elements ->
+            let cmp = defaultComparer
+            let arr = elements |> List.mapToArray (fun (k,v) -> struct(k,v))
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
             
-    static member FromArray (elements : array<'Key * 'Value>) =
+    static member FromArrayOld (elements : array<'Key * 'Value>) =
         let comparer = defaultComparer
         let mutable r = MapEmpty.Instance
         for (k, v) in elements do
             r <- r.AddInPlace(comparer, k, v)
         MapNew(comparer, r)
         
-    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
+    static member FromArray (elements : array<'Key * 'Value>) =
+        if elements.Length <= 0 then
+            MapNew(defaultComparer, MapEmpty.Instance)
 
-    static member FromListV (elements : list<struct('Key * 'Value)>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
+        elif elements.Length = 1 then
+            let (k,v) = elements.[0]
+            MapNew(defaultComparer, MapLeaf(k, v))
+
+        else
+            let cmp = defaultComparer
+            let arr = elements |> Array.map (fun (k,v) -> struct(k,v))
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
             
     static member FromArrayV (elements : array<struct('Key * 'Value)>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
+        if elements.Length <= 0 then
+            MapNew(defaultComparer, MapEmpty.Instance)
 
+        elif elements.Length = 1 then
+            let struct(k,v) = elements.[0]
+            MapNew(defaultComparer, MapLeaf(k, v))
+        else
+            let cmp = defaultComparer
+            let arr = Array.copy elements
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
+
+    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
+        let cmp = defaultComparer
+        let arr = elements |> Seq.toArray
+        if arr.Length <= 0 then
+            MapNew(cmp, MapEmpty.Instance)
+        elif arr.Length = 1 then
+            let struct(k,v) = arr.[0]
+            MapNew(cmp, MapLeaf(k,v))
+        else
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
+
+    static member FromListV (elements : list<struct('Key * 'Value)>) =
+        match elements with
+        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
+        | [struct(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
+        | elements ->
+            let cmp = defaultComparer
+            let arr = elements |> List.toArray
+            Array.sortInPlaceBy (fun struct(k,_) -> k) arr
+            MapNew.FromSortedArray(cmp, arr)
+            
     member x.Count = root.Count
     member x.Root = root
 
