@@ -82,22 +82,53 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
 [<Tests>]
 let tests =
     testList "MapNew" [
-        testProperty "ofSeq" (fun (m : Map<int, int>) ->
-            let mn = MapNew.ofSeq (Map.toSeq m)
+
+        testProperty "mergeSort" (fun (arr : struct(int * int)[]) ->
+            let a = 
+                MapNewImplementation.Array.mergeSortV System.Collections.Generic.Comparer<int>.Default (Array.copy arr)
+
+            let b = Array.copy arr
+            Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun struct(l,_) struct(r,_) -> compare l r))
+        
+            if a <> b then
+                printfn "%A %A" a b
+
+            a |> should equal b
+
+
+            let a = 
+                MapNewImplementation.Array.mergeSort System.Collections.Generic.Comparer<int>.Default (Array.map (fun struct(a,b) -> (a,b)) arr)
+
+            let b = Array.map (fun struct(a,b) -> (a,b)) arr
+            Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun (l,_) (r,_) -> compare l r))
+        
+            if a <> b then
+                printfn "%A %A" a b
+
+            a |> should equal b
+
+        )
+
+        testProperty "ofSeq" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofSeq l
             identical mn m
         )
         
-        testProperty "ofList" (fun (m : Map<int, int>) ->
-            let mn = MapNew.ofList (Map.toList m)
+        testProperty "ofList" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofList l
             identical mn m
         )
         
-        testProperty "ofArray" (fun (m : Map<int, int>) ->
-            let mn = MapNew.ofArray (Map.toArray m)
+        testProperty "ofArray" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofArray (List.toArray l)
             identical mn m
         )
 
-        testProperty "enumerate" (fun (m : Map<int, int>) ->
+        testProperty "enumerate" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
             let mn = MapNew.ofArray (Map.toArray m)
             identical mn m
 

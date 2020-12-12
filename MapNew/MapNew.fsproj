@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aardvark.Base" Version="5.1.0-prerelease0008" />
     <PackageReference Include="FSharp.Core" Version="5.0.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
     <PackageReference Include="Expecto" Version="9.0.2" />

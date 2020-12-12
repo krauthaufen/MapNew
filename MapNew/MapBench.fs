@@ -8,7 +8,7 @@ open MapNew
 [<PlainExporter; MemoryDiagnoser>]
 type MapBenchmark() =
 
-    [<DefaultValue; Params(1, 2, 10, 100, 1000)>]
+    [<DefaultValue; Params(10, 100, 1000)>]
     val mutable public Count : int
 
     let mutable data : (int * int)[] = [||]
@@ -43,12 +43,13 @@ type MapBenchmark() =
         Map.ofArray data
         
     [<Benchmark>]
-    member x.``MapNew_ofArray``() =
-        MapNew.FromArrayOld data
+    member x.``MapNew_ofArray_optimized``() =
+        MapNew.FromArray data
 
     [<Benchmark>]
-    member x.``MapNew_ofArray_optimized``() =
-        MapNew.ofArray data
+    member x.``MapNew_ofArray_optimized_DUPLICATESWRONG``() =
+        MapNew.FromArrayUnstableSort data
+        
 
     //[<Benchmark>]
     //member x.``Map_toArray``() =
