@@ -1347,150 +1347,42 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     static let empty = MapNew<'Key, 'Value>(defaultComparer, MapEmpty.Instance)
 
     static member Empty = empty
-    
-    static member private FromSortedArray(cmp : IComparer<'Key>, arr : struct('Key * 'Value)[]) =
-        if arr.Length <= 0 then 
-            MapNew(cmp, MapEmpty.Instance)
-        else
-            let mutable i = 1
-            let mutable o = 1
-            let mutable struct(lastKey,_) = arr.[0]
-            while i < arr.Length do
-                let struct(k,v) = arr.[i]
-                if cmp.Compare(lastKey, k) = 0 then
-                    arr.[o-1] <- struct(k,v)
-                else
-                    arr.[o] <- struct(k,v)
-                    lastKey <- k
-                    o <- o + 1
-                i <- i + 1
 
-            let rec create (arr : struct('Key * 'Value)[]) (l : int) (r : int) =
-                if l = r then
-                    let struct(k,v) = arr.[l]
-                    MapLeaf(k, v) :> Node<_,_>
-                elif l > r then
-                    MapEmpty.Instance
-                else
-                    let m = (l+r)/2
-                    let struct(k,v) = arr.[m]
-                    MapInner(
-                        create arr l (m-1),
-                        k, v,
-                        create arr (m+1) r
-                    ) :> Node<_,_>
-
-            MapNew(cmp, create arr 0 (o-1))
-
-    static member private FromSortedArray(cmp : IComparer<'Key>, arr : ('Key * 'Value)[]) =
-        if arr.Length <= 0 then 
-            MapNew(cmp, MapEmpty.Instance)
-        else
-            let mutable i = 1
-            let mutable o = 1
-            let mutable (lastKey,_) = arr.[0]
-            while i < arr.Length do
-                let v = arr.[i]
-                let (k,_) = v
-                if cmp.Compare(lastKey, k) = 0 then
-                    arr.[o-1] <- v
-                else
-                    arr.[o] <- v
-                    lastKey <- k
-                    o <- o + 1
-                i <- i + 1
-
-            let rec create (arr : ('Key * 'Value)[]) (l : int) (r : int) =
-                if l = r then
-                    let (k,v) = arr.[l]
-                    MapLeaf(k, v) :> Node<_,_>
-                elif l > r then
-                    MapEmpty.Instance
-                else
-                    let m = (l+r)/2
-                    let (k,v) = arr.[m]
-                    MapInner(
-                        create arr l (m-1),
-                        k, v,
-                        create arr (m+1) r
-                    ) :> Node<_,_>
-            MapNew(cmp, create arr 0 (o-1))
-
-    static member private FromMutableArrayUnstableSort(cmp : IComparer<'Key>, arr : ('Key * 'Value)[]) =
-        if arr.Length <= 0 then 
-            MapNew(cmp, MapEmpty.Instance)
-        else
-            Array.sortInPlaceBy fst arr
-            let mutable i = 1
-            let mutable o = 1
-            let mutable (lastKey,_) = arr.[0]
-            while i < arr.Length do
-                let v = arr.[i]
-                let (k,_) = v
-                if cmp.Compare(lastKey, k) = 0 then
-                    arr.[o-1] <- v
-                else
-                    arr.[o] <- v
-                    o <- o + 1
-                lastKey <- k
-                i <- i + 1
-
-            let rec create (arr : ('Key * 'Value)[]) (l : int) (r : int) =
-                if l = r then
-                    let (k,v) = arr.[l]
-                    MapLeaf(k, v) :> Node<_,_>
-                elif l > r then
-                    MapEmpty.Instance
-                else
-                    let m = (l+r)/2
-                    let (k,v) = arr.[m]
-                    MapInner(
-                        create arr l (m-1),
-                        k, v,
-                        create arr (m+1) r
-                    ) :> Node<_,_>
-            MapNew(cmp, create arr 0 (o-1))
-
-    static member FromArrayAddInPlace (elements : array<'Key * 'Value>) =
-        let comparer = defaultComparer
-        let mutable r = MapEmpty.Instance
-        for (k, v) in elements do
-            r <- r.AddInPlace(comparer, k, v)
-        MapNew(comparer, r)
-        
-    static member FromArrayOrderBy (elements : array<'Key * 'Value>) =
-        if elements.Length <= 0 then
-            MapNew(defaultComparer, MapEmpty.Instance)
-
-        elif elements.Length = 1 then
-            let (k,v) = elements.[0]
-            MapNew(defaultComparer, MapLeaf(k, v))
-            
-        elif elements.Length = 2 then
-            let (k0,v0) = elements.[0]
-            let (k1,v1) = elements.[1]
-            let cmp = defaultComparer
-            let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+    static member private CreateTree(cmp : IComparer<'Key>, arr : ('Key * 'Value)[], cnt : int)=
+        let rec create (arr : ('Key * 'Value)[]) (l : int) (r : int) =
+            if l = r then
+                let (k,v) = arr.[l]
+                MapLeaf(k, v) :> Node<_,_>
+            elif l > r then
+                MapEmpty.Instance
             else
-                MapNew(cmp, MapLeaf(k1, v1))
+                let m = (l+r)/2
+                let (k,v) = arr.[m]
+                MapInner(
+                    create arr l (m-1),
+                    k, v,
+                    create arr (m+1) r
+                ) :> Node<_,_>
 
-        elif elements.Length <= 5 then
-            let mutable res = MapEmpty.Instance
-            let cmp = defaultComparer
-            for (k,v) in elements do
-                res <- res.AddInPlace(cmp, k,v)
-            MapNew(cmp, res)
-        else
-            let cmp = defaultComparer
-            let arr = elements.OrderBy(Func<_,_>(fst), cmp).ToArray()
-            MapNew.FromSortedArray(cmp, arr)
+        MapNew(cmp, create arr 0 (cnt-1))
         
+    static member private CreateTree(cmp : IComparer<'Key>, arr : struct('Key * 'Value)[], cnt : int)=
+        let rec create (arr : struct('Key * 'Value)[]) (l : int) (r : int) =
+            if l = r then
+                let struct(k,v) = arr.[l]
+                MapLeaf(k, v) :> Node<_,_>
+            elif l > r then
+                MapEmpty.Instance
+            else
+                let m = (l+r)/2
+                let struct(k,v) = arr.[m]
+                MapInner(
+                    create arr l (m-1),
+                    k, v,
+                    create arr (m+1) r
+                ) :> Node<_,_>
 
-
+        MapNew(cmp, create arr 0 (cnt-1))
 
     static member FromArray (elements : array<'Key * 'Value>) =
         if elements.Length <= 0 then
@@ -1520,8 +1412,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let arr = elements |> Sorting.mergeSort false cmp
-            MapNew.FromSortedArray(cmp, arr)
+            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicates false cmp
+            MapNew.CreateTree(cmp, arr, cnt)
         
     static member FromArrayV (elements : array<struct('Key * 'Value)>) =
         if elements.Length <= 0 then
@@ -1551,8 +1443,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let arr = elements |> Sorting.mergeSortV false cmp
-            MapNew.FromSortedArray(cmp, arr)
+            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicatesV false cmp
+            MapNew.CreateTree(cmp, arr, cnt)
 
     static member FromSeq (elements : seq<'Key * 'Value>) =
         let cmp = defaultComparer
@@ -1581,7 +1473,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 map <- map.AddInPlace(cmp, k, v)
             MapNew(cmp, map)
         else
-            MapNew.FromSortedArray(cmp, Sorting.mergeSort true cmp arr)
+            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
+            MapNew.CreateTree(cmp, arr, cnt)
 
     static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
         let cmp = defaultComparer
@@ -1610,7 +1503,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 map <- map.AddInPlace(cmp, k, v)
             MapNew(cmp, map)
         else
-            MapNew.FromSortedArray(cmp, Sorting.mergeSortV true cmp arr)
+            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
+            MapNew.CreateTree(cmp, arr, cnt)
 
     static member FromList (elements : list<'Key * 'Value>) =
         match elements with
@@ -1619,7 +1513,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         | elements ->
             let cmp = defaultComparer
             let arr = elements |> List.toTupleArray
-            MapNew.FromSortedArray(cmp, Sorting.mergeSort true cmp arr)
+            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
+            MapNew.CreateTree(cmp, arr, cnt)
 
     static member FromListV (elements : list<struct('Key * 'Value)>) =
         match elements with
@@ -1628,7 +1523,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         | elements ->
             let cmp = defaultComparer
             let arr = elements |> List.toTupleArrayV
-            MapNew.FromSortedArray(cmp, Sorting.mergeSortV true cmp arr)
+            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
+            MapNew.CreateTree(cmp, arr, cnt)
             
             
     member x.Count = root.Count
