@@ -181,6 +181,15 @@ type MapBenchmark() =
     //[<Benchmark>]
     //member x.``MapNew_fold``() =
     //    (0, mapNew) ||> MapNew.fold (fun s k _ -> s + k)
+        
+    [<Benchmark>]
+    member x.``Map_foldBack``() =
+        (map, 0) ||> Map.foldBack (fun s k _ -> s + k)
+
+    [<Benchmark>]
+    member x.``MapNew_foldBack``() =
+        (mapNew, 0) ||> MapNew.foldBack (fun s k _ -> s + k)
+
 
         
 

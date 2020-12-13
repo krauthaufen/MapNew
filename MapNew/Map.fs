@@ -1566,11 +1566,35 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.Fold(folder : 'State -> 'Key -> 'Value -> 'State, seed : 'State) =
         let folder = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt folder
-        root.Fold(folder, seed)
+
+        let rec fold (folder : OptimizedClosures.FSharpFunc<_,_,_,_>) seed (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                let s1 = fold folder seed n.Left
+                let s2 = folder.Invoke(s1, n.Key, n.Value)
+                fold folder s2 n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                folder.Invoke(seed, n.Key, n.Value)
+            | _ ->
+                seed
+
+        fold folder seed root
         
     member x.FoldBack(folder : 'Key -> 'Value -> 'State -> 'State, seed : 'State) =
         let folder = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt folder
-        root.FoldBack(folder, seed)
+
+        let rec foldBack (folder : OptimizedClosures.FSharpFunc<_,_,_,_>) seed (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                let s1 = foldBack folder seed n.Right
+                let s2 = folder.Invoke(n.Key, n.Value, s1)
+                foldBack folder s2 n.Left
+            | :? MapLeaf<'Key, 'Value> as n ->
+                folder.Invoke(n.Key, n.Value, seed)
+            | _ ->
+                seed
+
+        foldBack folder seed root
 
     member x.TryFind(key : 'Key) =
         root.TryFind(comparer, key)
