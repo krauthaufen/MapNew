@@ -47,8 +47,8 @@ type MapBenchmark() =
         MapNew.FromArray data
 
     [<Benchmark>]
-    member x.``MapNew_ofArray_optimized_DUPLICATESWRONG``() =
-        MapNew.FromArrayUnstableSort data
+    member x.``MapNew_ofArray_OrderBy``() =
+        MapNew.FromArrayOrderBy data
         
 
     //[<Benchmark>]

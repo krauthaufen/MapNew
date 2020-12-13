@@ -1,6 +1,7 @@
 ﻿namespace MapNew
 
 open System
+open System.Linq
 open System.Collections.Generic
 
 module MapNewImplementation = 
@@ -199,302 +200,6 @@ module MapNewImplementation =
                     
                 if cnt < res.Length then System.Array.Resize(&res, cnt)
                 res
-
-    module Array =
-        
-        let heapSortInPlace (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) =
-            let heap : struct('Key * 'Value * int)[] = Array.zeroCreate arr.Length
-            let mutable cnt = 0
-
-            let inline compare (l : 'Key) (li : int) (r : 'Key) (ri : int) =
-                let c = cmp.Compare(l, r)
-                if c = 0 then compare li ri
-                else c
-            let cmp = ()
-
-            let rec bubbleUp (i : int) (index : int) (key : 'Key) (value : 'Value) =
-                if i > 0 then
-                    let pi = (i - 1) / 2
-                    let struct(pk, pv, pid) = heap.[pi] 
-                    let c = compare pk pid key index
-                    if c > 0 then
-                        heap.[i] <- struct(pk, pv, pid)
-                        bubbleUp pi index key value
-                    else
-                        heap.[i] <- struct(key, value, index)
-                else
-                    heap.[i] <- struct(key, value, index)
-
-            let rec pushDown (i : int) (index : int) (key : 'Key) (value : 'Value) =
-                let ci0 = 2 * i + 1
-                let ci1 = ci0 + 1
-                if ci1 < cnt then
-                    let struct(k0, v0, id0) = heap.[ci0]
-                    let struct(k1, v1, id1) = heap.[ci1]
-
-                    let cmp0 = compare key index k0 id0
-                    let cmp1 = compare key index k1 id1
-
-                    if cmp0 > 0 && cmp1 > 0 then
-                        let cmp01 = compare k0 id0 k1 id1
-                        if cmp01 < 0 then
-                            heap.[i] <- struct(k0, v0, id0)
-                            pushDown ci0 index key value
-                        else
-                            heap.[i] <- struct(k1, v1, id1)
-                            pushDown ci1 index key value
-
-                    elif cmp0 > 0 then
-                        heap.[i] <- struct(k0, v0, id0)
-                        pushDown ci0 index key value
-                    elif cmp1 > 0 then
-                        heap.[i] <- struct(k1, v1, id1)
-                        pushDown ci1 index key value
-                    else
-                        heap.[i] <- struct(key, value, index)
-
-                elif ci0 < cnt then
-                    let struct(k0, v0, id0) = heap.[ci0]
-                    let cmp0 = compare key index k0 id0
-                    if cmp0 > 0 then
-                        heap.[i] <- struct(k0, v0, id0)
-                        pushDown ci0 index key value
-                    else
-                        heap.[i] <- struct(key, value, index)
-                else
-                    heap.[i] <- struct(key, value, index)
-            
-            let enqueue (index : int) (key : 'Key) (value : 'Value) =
-                if cnt = 0 then
-                    heap.[0] <- struct(key, value, index)
-                    cnt <- 1
-                else
-                    let id = cnt
-                    cnt <- cnt + 1
-                    bubbleUp id index key value
-
-            let dequeue () =
-                let struct(k,v,_) = heap.[0]
-                let last = cnt - 1
-                let struct(lk, lv, lid) = heap.[last]
-                cnt <- last
-                pushDown 0 lid lk lv
-                struct(k,v)
-        
-            for i in 0 .. arr.Length - 1 do
-                let struct(k, v) = arr.[i]
-                enqueue i k v
-
-            for i in 0 .. cnt - 1 do
-                arr.[i] <- dequeue()
-
-
-        let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) =
-            if ri < src.Length then
-                let le = min src.Length (li + len)
-                let re = min src.Length (ri + len)
-                let mutable oi = li
-                let mutable li = li
-                let mutable ri = ri
-                let mutable struct(lk, lv) = src.[li]
-                let mutable struct(rk, rv) = src.[ri]
-
-                while li < le && ri < re do
-                    let c = cmp.Compare(lk, rk)
-                    if c <= 0 then
-                        dst.[oi] <- struct(lk, lv)
-                        oi <- oi + 1
-                        li <- li + 1
-                        if li < le then
-                            let struct(k, v) = src.[li]
-                            lk <- k
-                            lv <- v
-                    else
-                        dst.[oi] <- struct(rk, rv)
-                        oi <- oi + 1
-                        ri <- ri + 1
-                        if ri < re then
-                            let struct(k, v) = src.[ri]
-                            rk <- k
-                            rv <- v
-
-                while li < le do
-                    dst.[oi] <- src.[li]
-                    oi <- oi + 1
-                    li <- li + 1
-                
-                while ri < re do
-                    dst.[oi] <- src.[ri]
-                    oi <- oi + 1
-                    ri <- ri + 1
-            elif li < src.Length then
-                let mutable li = li
-                let le = min src.Length (li + len)
-                while li < le do
-                    dst.[li] <- src.[li]
-                    li <- li + 1
-            else
-                ()
-
-        let mergeSortV (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) =
-            if arr.Length <= 1 then 
-                arr
-            else
-                let mutable src = arr
-                let mutable dst = Array.zeroCreate arr.Length
-
-                let mutable sortedLength = 1
-                while sortedLength < arr.Length do
-                    let mutable li = 0
-                    let mutable ri = sortedLength
-                    while li < arr.Length do
-                        mergeSeqV cmp li ri sortedLength src dst
-                        li <- ri + sortedLength
-                        ri <- li + sortedLength
-                    sortedLength <- sortedLength <<< 1
-
-                    let t = src
-                    src <- dst
-                    dst <- t
-                src
-
-
-        let inline private mergeSeq (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) =
-            if ri < src.Length then
-                let le = min src.Length (li + len)
-                let re = min src.Length (ri + len)
-                let mutable oi = li
-                let mutable li = li
-                let mutable ri = ri
-                let mutable lv = src.[li]
-                let mutable (lk, _) = lv
-                let mutable rv = src.[ri]
-                let mutable (rk, _) = rv
-
-                while li < le && ri < re do
-                    let c = cmp.Compare(lk, rk)
-                    if c <= 0 then
-                        dst.[oi] <- lv
-                        oi <- oi + 1
-                        li <- li + 1
-                        if li < le then
-                            let v = src.[li]
-                            let (k, _) = v
-                            lk <- k
-                            lv <- v
-                    else
-                        dst.[oi] <- rv
-                        oi <- oi + 1
-                        ri <- ri + 1
-                        if ri < re then
-                            let v = src.[ri]
-                            let (k, _) = v
-                            rk <- k
-                            rv <- v
-
-                while li < le do
-                    dst.[oi] <- src.[li]
-                    oi <- oi + 1
-                    li <- li + 1
-                
-                while ri < re do
-                    dst.[oi] <- src.[ri]
-                    oi <- oi + 1
-                    ri <- ri + 1
-            elif li < src.Length then
-                let mutable li = li
-                let le = min src.Length (li + len)
-                while li < le do
-                    dst.[li] <- src.[li]
-                    li <- li + 1
-            else
-                ()
-
-        let private mergeOverrideDuplicates (cmp : IComparer<'Key>) (src  : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) (ri : int) =
-            let mutable di = 0
-            let mutable lastOutput = Unchecked.defaultof<'Key>
-            
-            let append (value) =
-                let k,_ = value
-                if di > 0 then
-                    let c = cmp.Compare(lastOutput, k)
-                    if c = 0 then
-                        dst.[di-1] <- value
-                    else
-                        dst.[di] <- value
-                        di <- di + 1
-                    lastOutput <- k
-                else
-                    dst.[di] <- value
-                    di <- 1
-                    lastOutput <- k
-                    
-            let mutable li = 0
-            let mutable ri = ri
-            let le = ri
-            let re = src.Length
-            
-            let mutable lv = src.[li]
-            let mutable (lk, _) = lv
-            let mutable rv = src.[ri]
-            let mutable (rk, _) = rv
-
-            while li < le && ri < re do
-                let c = cmp.Compare(lk, rk)
-                if c <= 0 then
-                    append lv
-                    li <- li + 1
-                    if li < le then
-                        let v = src.[li]
-                        let (k, _) = v
-                        lk <- k
-                        lv <- v
-                else
-                    append rv
-                    ri <- ri + 1
-                    if ri < re then
-                        let v = src.[ri]
-                        let (k, _) = v
-                        rk <- k
-                        rv <- v
-
-            while li < le do
-                append src.[li]
-                li <- li + 1
-                
-            while ri < re do
-                append src.[ri]
-                ri <- ri + 1
-
-            di
-
-        let mergeSort (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) =
-            if arr.Length <= 1 then 
-                arr
-            else
-                let mutable src = arr
-                let mutable dst = Array.zeroCreate arr.Length
-
-                let mutable sortedLength = 1
-                while sortedLength < arr.Length do
-                    let mutable li = 0
-                    let mutable ri = sortedLength
-                    while li < arr.Length do
-                        mergeSeq cmp li ri sortedLength src dst
-                        li <- ri + sortedLength
-                        ri <- li + sortedLength
-                    sortedLength <- sortedLength <<< 1
-
-                    let t = src
-                    src <- dst
-                    dst <- t
-
-                //let cnt = mergeOverrideDuplicates cmp src dst sortedLength
-
-                src
-
-
-
 
     [<AbstractClass>]
     type Node<'Key, 'Value>() =
@@ -1642,12 +1347,11 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     static let empty = MapNew<'Key, 'Value>(defaultComparer, MapEmpty.Instance)
 
     static member Empty = empty
-
-    static member private FromMutableArrayMergeSort(cmp : IComparer<'Key>, arr : struct('Key * 'Value)[]) =
+    
+    static member private FromSortedArray(cmp : IComparer<'Key>, arr : struct('Key * 'Value)[]) =
         if arr.Length <= 0 then 
             MapNew(cmp, MapEmpty.Instance)
         else
-            let arr = Array.mergeSortV cmp arr
             let mutable i = 1
             let mutable o = 1
             let mutable struct(lastKey,_) = arr.[0]
@@ -1678,11 +1382,10 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
             MapNew(cmp, create arr 0 (o-1))
 
-    static member private FromMutableArrayMergeSort(cmp : IComparer<'Key>, arr : ('Key * 'Value)[]) =
+    static member private FromSortedArray(cmp : IComparer<'Key>, arr : ('Key * 'Value)[]) =
         if arr.Length <= 0 then 
             MapNew(cmp, MapEmpty.Instance)
         else
-            let arr = Array.mergeSort cmp arr
             let mutable i = 1
             let mutable o = 1
             let mutable (lastKey,_) = arr.[0]
@@ -1693,8 +1396,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                     arr.[o-1] <- v
                 else
                     arr.[o] <- v
+                    lastKey <- k
                     o <- o + 1
-                lastKey <- k
                 i <- i + 1
 
             let rec create (arr : ('Key * 'Value)[]) (l : int) (r : int) =
@@ -1755,7 +1458,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             r <- r.AddInPlace(comparer, k, v)
         MapNew(comparer, r)
         
-    static member FromArrayUnstableSort (elements : array<'Key * 'Value>) =
+    static member FromArrayOrderBy (elements : array<'Key * 'Value>) =
         if elements.Length <= 0 then
             MapNew(defaultComparer, MapEmpty.Instance)
 
@@ -1783,9 +1486,12 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let arr = elements |> Array.copy
-            MapNew.FromMutableArrayUnstableSort(cmp, arr)
+            let arr = elements.OrderBy(Func<_,_>(fst), cmp).ToArray()
+            MapNew.FromSortedArray(cmp, arr)
         
+
+
+
     static member FromArray (elements : array<'Key * 'Value>) =
         if elements.Length <= 0 then
             MapNew(defaultComparer, MapEmpty.Instance)
@@ -1814,8 +1520,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let arr = elements |> Array.copy
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            let arr = elements |> Sorting.mergeSort false cmp
+            MapNew.FromSortedArray(cmp, arr)
         
     static member FromArrayV (elements : array<struct('Key * 'Value)>) =
         if elements.Length <= 0 then
@@ -1845,8 +1551,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let arr = elements |> Array.copy
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            let arr = elements |> Sorting.mergeSortV false cmp
+            MapNew.FromSortedArray(cmp, arr)
 
     static member FromSeq (elements : seq<'Key * 'Value>) =
         let cmp = defaultComparer
@@ -1875,7 +1581,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 map <- map.AddInPlace(cmp, k, v)
             MapNew(cmp, map)
         else
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            MapNew.FromSortedArray(cmp, Sorting.mergeSort true cmp arr)
 
     static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
         let cmp = defaultComparer
@@ -1904,7 +1610,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 map <- map.AddInPlace(cmp, k, v)
             MapNew(cmp, map)
         else
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            MapNew.FromSortedArray(cmp, Sorting.mergeSortV true cmp arr)
 
     static member FromList (elements : list<'Key * 'Value>) =
         match elements with
@@ -1913,7 +1619,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         | elements ->
             let cmp = defaultComparer
             let arr = elements |> List.toTupleArray
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            MapNew.FromSortedArray(cmp, Sorting.mergeSort true cmp arr)
 
     static member FromListV (elements : list<struct('Key * 'Value)>) =
         match elements with
@@ -1922,7 +1628,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         | elements ->
             let cmp = defaultComparer
             let arr = elements |> List.toTupleArrayV
-            MapNew.FromMutableArrayMergeSort(cmp, arr)
+            MapNew.FromSortedArray(cmp, Sorting.mergeSortV true cmp arr)
             
             
     member x.Count = root.Count

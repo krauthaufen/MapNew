@@ -4,7 +4,6 @@ open FsUnit
 open Expecto
 open MapNew
 
-
 let cfg = 
     { FsCheckConfig.defaultConfig with
         maxTest = 400
@@ -83,29 +82,18 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
 let tests =
     testList "MapNew" [
 
-        testProperty "mergeSort" (fun (arr : struct(int * int)[]) ->
-            let a = 
-                MapNewImplementation.Array.mergeSortV System.Collections.Generic.Comparer<int>.Default (Array.copy arr)
+        testProperty "mergeSort" (fun (arr : (int * int)[]) ->
+
+            let a = Sorting.mergeSort false LanguagePrimitives.FastGenericComparer<int> arr
 
             let b = Array.copy arr
-            Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun struct(l,_) struct(r,_) -> compare l r))
-        
-            if a <> b then
-                printfn "%A %A" a b
-
-            a |> should equal b
-
-
-            let a = 
-                MapNewImplementation.Array.mergeSort System.Collections.Generic.Comparer<int>.Default (Array.map (fun struct(a,b) -> (a,b)) arr)
-
-            let b = Array.map (fun struct(a,b) -> (a,b)) arr
             Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun (l,_) (r,_) -> compare l r))
         
             if a <> b then
                 printfn "%A %A" a b
 
             a |> should equal b
+
 
         )
 
