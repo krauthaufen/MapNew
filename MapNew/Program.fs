@@ -15,7 +15,7 @@ let profiling() =
 let main _argv =
     printfn "FSharp.Core: %A" typeof<list<int>>.Assembly.FullName
     
-    profiling()
+    //profiling()
 
 
     //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.SortBenchmark>()

@@ -40,17 +40,17 @@ type MapBenchmark() =
         existing <- data.[rand.Next(data.Length)] |> fst
         toolarge <- System.Int32.MaxValue
 
-    [<Benchmark>]
-    member x.``Map_ofArray``() =
-        Map.ofArray data
+    //[<Benchmark>]
+    //member x.``Map_ofArray``() =
+    //    Map.ofArray data
         
     //[<Benchmark>]
     //member x.``MapNew_ofArray_add``() =
     //    MapNew.FromArrayAddInPlace data
 
-    [<Benchmark>]
-    member x.``MapNew_ofArray``() =
-        MapNew.ofArray data
+    //[<Benchmark>]
+    //member x.``MapNew_ofArray``() =
+    //    MapNew.ofArray data
         
         
     //[<Benchmark>]
@@ -135,13 +135,13 @@ type MapBenchmark() =
     //member x.``MapNew_containsKey_nonexisting``() =
     //    mapNew.ContainsKey toolarge
          
-    //[<Benchmark>]
-    //member x.``Map_tryFind``() =
-    //    Map.tryFind (fst data.[0]) map
+    [<Benchmark>]
+    member x.``Map_tryFind``() =
+        Map.tryFind (fst data.[0]) map
         
-    //[<Benchmark>]
-    //member x.``MapNew_tryFind``() =
-    //    MapNew.tryFind (fst data.[0]) mapNew
+    [<Benchmark>]
+    member x.``MapNew_tryFind``() =
+        mapNew.TryFind(fst data.[0])
         
     //[<Benchmark>]
     //member x.``Map_tryFind_nonexisting``() =
@@ -182,13 +182,13 @@ type MapBenchmark() =
     //member x.``MapNew_fold``() =
     //    (0, mapNew) ||> MapNew.fold (fun s k _ -> s + k)
         
-    [<Benchmark>]
-    member x.``Map_foldBack``() =
-        (map, 0) ||> Map.foldBack (fun s k _ -> s + k)
+    //[<Benchmark>]
+    //member x.``Map_foldBack``() =
+    //    (map, 0) ||> Map.foldBack (fun s k _ -> s + k)
 
-    [<Benchmark>]
-    member x.``MapNew_foldBack``() =
-        (mapNew, 0) ||> MapNew.foldBack (fun s k _ -> s + k)
+    //[<Benchmark>]
+    //member x.``MapNew_foldBack``() =
+    //    (mapNew, 0) ||> MapNew.foldBack (fun s k _ -> s + k)
 
 
         

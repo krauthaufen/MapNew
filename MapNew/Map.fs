@@ -1538,7 +1538,17 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.Iter(action : 'Key -> 'Value -> unit) =
         let action = OptimizedClosures.FSharpFunc<_,_,_>.Adapt action
-        root.Iter action
+        let rec iter (action : OptimizedClosures.FSharpFunc<_,_,_>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                iter action n.Left
+                action.Invoke(n.Key, n.Value)
+                iter action n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                action.Invoke(n.Key, n.Value)
+            | _ ->
+                ()
+        iter action root
 
     member x.Map(mapping : 'Key -> 'Value -> 'T) =
         let mapping = OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping
@@ -1558,11 +1568,31 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.Exists(predicate : 'Key -> 'Value -> bool) =
         let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
-        root.Exists predicate
+        let rec exists (predicate : OptimizedClosures.FSharpFunc<_,_,_>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                exists predicate n.Left ||
+                predicate.Invoke(n.Key, n.Value) ||
+                exists predicate n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                predicate.Invoke(n.Key, n.Value)
+            | _ ->
+                false
+        exists predicate root
         
     member x.Forall(predicate : 'Key -> 'Value -> bool) =
+        let rec forall (predicate : OptimizedClosures.FSharpFunc<_,_,_>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                forall predicate n.Left &&
+                predicate.Invoke(n.Key, n.Value) &&
+                forall predicate n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                predicate.Invoke(n.Key, n.Value)
+            | _ ->
+                true
         let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
-        root.Forall predicate
+        forall predicate root
 
     member x.Fold(folder : 'State -> 'Key -> 'Value -> 'State, seed : 'State) =
         let folder = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt folder
@@ -1595,15 +1625,54 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 seed
 
         foldBack folder seed root
-
+        
     member x.TryFind(key : 'Key) =
-        root.TryFind(comparer, key)
+        let rec tryFind (cmp : IComparer<_>) key (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then tryFind cmp key n.Right
+                elif c < 0 then tryFind cmp key n.Left
+                else Some n.Value
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c = 0 then Some n.Value
+                else None
+            | _ ->
+                None
+        tryFind comparer key root
 
     member x.TryFindV(key : 'Key) =
-        root.TryFindV(comparer, key)
-            
+        let rec tryFind (cmp : IComparer<_>) key (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then tryFind cmp key n.Right
+                elif c < 0 then tryFind cmp key n.Left
+                else ValueSome n.Value
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c = 0 then ValueSome n.Value
+                else ValueNone
+            | _ ->
+                ValueNone
+        tryFind comparer key root
+    
     member x.ContainsKey(key : 'Key) =
-        root.ContainsKey(comparer, key)
+        let rec contains (cmp : IComparer<_>) key (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then contains cmp key n.Right
+                elif c < 0 then contains cmp key n.Left
+                else true
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c = 0 then true
+                else false
+            | _ ->
+                false
+        contains comparer key root
 
     member x.GetEnumerator() = new MapNewEnumerator<_,_>(root)
 
@@ -1612,12 +1681,40 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.ToArray() =
         let arr = Array.zeroCreate x.Count
-        root.CopyTo(arr, 0) |> ignore
+        let rec copyTo (arr : array<_>) (index : ref<int>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                copyTo arr index n.Left
+                arr.[!index] <- n.Key, n.Value
+                index := !index + 1
+                copyTo arr index n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                arr.[!index] <- n.Key, n.Value
+                index := !index + 1
+            | _ ->
+                ()
+
+        let index = ref 0
+        copyTo arr index root
         arr
 
     member x.ToArrayV() =
         let arr = Array.zeroCreate x.Count
-        root.CopyToV(arr, 0) |> ignore
+        let rec copyTo (arr : array<_>) (index : ref<int>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                copyTo arr index n.Left
+                arr.[!index] <- struct(n.Key, n.Value)
+                index := !index + 1
+                copyTo arr index n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                arr.[!index] <- struct(n.Key, n.Value)
+                index := !index + 1
+            | _ ->
+                ()
+
+        let index = ref 0
+        copyTo arr index root
         arr
 
     member x.CopyTo(array : ('Key * 'Value)[], startIndex : int) =
