@@ -1676,9 +1676,28 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.GetEnumerator() = new MapNewEnumerator<_,_>(root)
 
-    member x.ToList() = root.ToList []
-    member x.ToListV() = root.ToListV []
+    member x.ToList() = 
+        let rec toList acc (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                toList ((n.Key, n.Value) :: toList acc n.Right) n.Left
+            | :? MapLeaf<'Key, 'Value> as n ->
+                (n.Key, n.Value) :: acc
+            | _ ->
+                acc
+        toList [] root
 
+    member x.ToListV() = 
+        let rec toList acc (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                toList (struct(n.Key, n.Value) :: toList acc n.Right) n.Left
+            | :? MapLeaf<'Key, 'Value> as n ->
+                struct(n.Key, n.Value) :: acc
+            | _ ->
+                acc
+        toList [] root
+       
     member x.ToArray() =
         let arr = Array.zeroCreate x.Count
         let rec copyTo (arr : array<_>) (index : ref<int>) (n : Node<_,_>) =
