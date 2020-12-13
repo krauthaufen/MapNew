@@ -53,6 +53,7 @@ module Sorting =
         else
             let mutable src = Array.zeroCreate arr.Length
             let mutable dst = 
+                // mutateArray => allowed to mutate arr
                 if mutateArray then arr
                 else Array.zeroCreate arr.Length
 
@@ -80,21 +81,27 @@ module Sorting =
                 src.[i0] <- arr.[i0]
                 i0 <- i0 + 1
 
+            // merge sorted parts of length `sortedLength`
             let mutable sortedLength = 2
             while sortedLength < arr.Length do
                 let mutable li = 0
                 let mutable ri = sortedLength
+
+                // merge case
                 while ri < arr.Length do
                     mergeSeq cmp li ri sortedLength src dst
                     li <- ri + sortedLength
                     ri <- li + sortedLength
 
+                // right got empty
                 while li < arr.Length do
                     dst.[li] <- src.[li]
                     li <- li + 1
-
+                    
+                // sortedLength * 2
                 sortedLength <- sortedLength <<< 1
-
+                
+                // swap src and dst
                 let t = dst
                 dst <- src
                 src <- t
@@ -146,6 +153,7 @@ module Sorting =
         else
             let mutable src = Array.zeroCreate arr.Length
             let mutable dst = 
+                // mutateArray => allowed to mutate arr
                 if mutateArray then arr
                 else Array.zeroCreate arr.Length
 
@@ -170,22 +178,29 @@ module Sorting =
             if i0 < arr.Length then
                 src.[i0] <- arr.[i0]
                 i0 <- i0 + 1
-
+                
+            // merge sorted parts of length `sortedLength`
             let mutable sortedLength = 2
             while sortedLength < arr.Length do
                 let mutable li = 0
                 let mutable ri = sortedLength
+
+                // merge case
                 while ri < arr.Length do
                     mergeSeqV cmp li ri sortedLength src dst
                     li <- ri + sortedLength
                     ri <- li + sortedLength
 
+                // right got empty
                 while li < arr.Length do
                     dst.[li] <- src.[li]
                     li <- li + 1
 
-                sortedLength <- sortedLength <<< 1
 
+                // sortedLength * 2
+                sortedLength <- sortedLength <<< 1
+                
+                // swap src and dst
                 let t = dst
                 dst <- src
                 src <- t
