@@ -100,6 +100,27 @@ let tests =
             identical mn m
         )
 
+        
+        testProperty "ofSeqV" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofSeqV (l |> List.map (fun (a,b) -> struct(a,b)))
+            identical mn m
+        )
+        
+        testProperty "ofListV" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofListV (l |> List.map (fun (a,b) -> struct(a,b)))
+            identical mn m
+        )
+        
+        testProperty "ofArrayV" (fun (l : list<int * int>) ->
+            let m = Map.ofList l
+            let mn = MapNew.ofArrayV (l |> List.map (fun (a,b) -> struct(a,b)) |> List.toArray)
+            identical mn m
+        )
+
+
+
         testProperty "enumerate" (fun (l : list<int * int>) ->
             let m = Map.ofList l
             let mn = MapNew.ofArray (Map.toArray m)
