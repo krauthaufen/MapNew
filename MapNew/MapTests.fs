@@ -82,22 +82,6 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
 let tests =
     testList "MapNew" [
 
-        testProperty "mergeSort" (fun (arr : (int * int)[]) ->
-
-            let a = Sorting.mergeSort false LanguagePrimitives.FastGenericComparer<int> arr arr.Length
-
-            let b = Array.copy arr
-            Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun (l,_) (r,_) -> compare l r))
-        
-            if a <> b then
-                printfn "%A %A" a b
-
-            a |> should equal b
-
-
-        )
-     
-
         testProperty "ofSeq" (fun (l : list<int * int>) ->
             let m = Map.ofList l
             let mn = MapNew.ofSeq l

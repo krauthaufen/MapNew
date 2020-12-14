@@ -25,7 +25,7 @@ let main _argv =
 
     ManualConfig
         .Create(DefaultConfig.Instance)
-        .AddJob(Job.Default.WithGcServer(true))
+        .AddJob(Job.Default.WithGcServer(false))
         // .AddJob(Job.Default.WithGcServer(false))
 
     |> BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>
