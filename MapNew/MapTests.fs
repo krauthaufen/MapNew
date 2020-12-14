@@ -84,7 +84,7 @@ let tests =
 
         testProperty "mergeSort" (fun (arr : (int * int)[]) ->
 
-            let a = Sorting.mergeSort false LanguagePrimitives.FastGenericComparer<int> arr
+            let a = Sorting.mergeSort false LanguagePrimitives.FastGenericComparer<int> arr arr.Length
 
             let b = Array.copy arr
             Aardvark.Base.Sorting.SortingExtensions.TimSort(b, System.Func<_,_,_>(fun (l,_) (r,_) -> compare l r))

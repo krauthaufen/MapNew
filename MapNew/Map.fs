@@ -6,201 +6,6 @@ open System.Collections.Generic
 
 module MapNewImplementation = 
 
-    module Seq =
-
-        let toKeyValueArray (s : seq<'a * 'b>) =
-            use e = s.GetEnumerator()
-            if e.MoveNext() then
-                let (k0, v0) = e.Current
-                if e.MoveNext() then
-                    let mutable keys = Array.zeroCreate 16
-                    let mutable values = Array.zeroCreate 16
-                    let mutable cnt = 2
-                    let (k1, v1) = e.Current
-                    keys.[0] <- k0
-                    keys.[1] <- k1
-                    values.[0] <- v0
-                    values.[1] <- v1
-
-                    while e.MoveNext() do
-                        if cnt >= keys.Length then 
-                            let len = keys.Length <<< 1
-                            System.Array.Resize(&keys, len)
-                            System.Array.Resize(&values, len)
-                        let (k,v) = e.Current
-                        keys.[cnt] <- k
-                        values.[cnt] <- v
-                        cnt <- cnt + 1
-
-                    //if cnt < res.Length then System.Array.Resize(&res, cnt)
-                    struct(keys, values, cnt)
-                else    
-                    struct([| k0 |], [| v0 |], 1)
-            else
-                struct(null, null, 0)
-                
-        let toKeyValueArrayV (s : seq<struct('a * 'b)>) =
-            use e = s.GetEnumerator()
-            if e.MoveNext() then
-                let struct(k0, v0) = e.Current
-                if e.MoveNext() then
-                    let mutable keys = Array.zeroCreate 16
-                    let mutable values = Array.zeroCreate 16
-                    let mutable cnt = 2
-                    let struct(k1, v1) = e.Current
-                    keys.[0] <- k0
-                    keys.[1] <- k1
-                    values.[0] <- v0
-                    values.[1] <- v1
-
-                    while e.MoveNext() do
-                        if cnt >= keys.Length then 
-                            let len = keys.Length <<< 1
-                            System.Array.Resize(&keys, len)
-                            System.Array.Resize(&values, len)
-                        let struct(k,v) = e.Current
-                        keys.[cnt] <- k
-                        values.[cnt] <- v
-                        cnt <- cnt + 1
-
-                    //if cnt < res.Length then System.Array.Resize(&res, cnt)
-                    struct(keys, values, cnt)
-                else    
-                    struct([| k0 |], [| v0 |], 1)
-            else
-                struct(null, null, 0)
-
-        let toTupleArray (s : seq<'a * 'b>) =
-            use e = s.GetEnumerator()
-            if e.MoveNext() then
-                let el0 = e.Current
-                if e.MoveNext() then
-                    let mutable res = Array.zeroCreate 16
-                    let mutable cnt = 2
-                    let el1 = e.Current
-                    res.[0] <- el0
-                    res.[1] <- el1
-
-                    while e.MoveNext() do
-                        if cnt >= res.Length then 
-                            let len = res.Length <<< 1
-                            System.Array.Resize(&res, len)
-                        let el = e.Current
-                        res.[cnt] <- el
-                        cnt <- cnt + 1
-
-                    if cnt < res.Length then System.Array.Resize(&res, cnt)
-                    res
-                else    
-                    [| el0 |]
-            else
-                [||]
-
-        let toTupleArrayV (s : seq<struct('a * 'b)>) =
-            use e = s.GetEnumerator()
-            if e.MoveNext() then
-                let struct(k0, v0) = e.Current
-                if e.MoveNext() then
-                    let mutable res = Array.zeroCreate 16
-                    let mutable cnt = 2
-                    let struct(k1, v1) = e.Current
-                    res.[0] <- struct(k0, v0)
-                    res.[1] <- struct(k1, v1)
-
-                    while e.MoveNext() do
-                        if cnt >= res.Length then 
-                            let len = res.Length <<< 1
-                            System.Array.Resize(&res, len)
-                        let struct(k,v) = e.Current
-                        res.[cnt] <- struct(k,v)
-                        cnt <- cnt + 1
-
-                    if cnt < res.Length then System.Array.Resize(&res, cnt)
-                    res
-                else    
-                    [| struct(k0, v0) |]
-            else
-                [||]
-                
-    module List =
-        let toKeyValueArray (l : list<'a * 'b>) =
-            match l with
-            | [] -> struct(null, null, 0)
-            | [(k,v)] -> struct([| k |], [| v |], 1)
-            | (k0, v0)::l ->
-                let mutable keys = Array.zeroCreate 16
-                let mutable values = Array.zeroCreate 16
-                keys.[0] <- k0
-                values.[0] <- v0
-                let mutable cnt = 1
-                for (k, v) in l do
-                    if cnt >= keys.Length then 
-                        let len = keys.Length <<< 1
-                        System.Array.Resize(&keys, len)
-                        System.Array.Resize(&values, len)
-                    keys.[cnt] <- k
-                    values.[cnt] <- v
-                    cnt <- cnt + 1
-
-                struct(keys, values, cnt)
-                
-        let toKeyValueArrayV (l : list<struct('a * 'b)>) =
-            match l with
-            | [] -> struct(null, null, 0)
-            | [(k,v)] -> struct([| k |], [| v |], 1)
-            | struct(k0, v0)::l ->
-                let mutable keys = Array.zeroCreate 16
-                let mutable values = Array.zeroCreate 16
-                keys.[0] <- k0
-                values.[0] <- v0
-                let mutable cnt = 1
-                for struct(k, v) in l do
-                    if cnt >= keys.Length then 
-                        let len = keys.Length <<< 1
-                        System.Array.Resize(&keys, len)
-                        System.Array.Resize(&values, len)
-                    keys.[cnt] <- k
-                    values.[cnt] <- v
-                    cnt <- cnt + 1
-
-                struct(keys, values, cnt)
-
-        let toTupleArray (l : list<'a * 'b>) =
-            match l with
-            | [] -> [||]
-            | [e] -> [| e |]
-            | e::l ->
-                let mutable res = Array.zeroCreate 16
-                res.[0] <- e
-                let mutable cnt = 1
-                for e in l do
-                    if cnt >= res.Length then 
-                        let len = res.Length <<< 1
-                        System.Array.Resize(&res, len)
-                    res.[cnt] <- e
-                    cnt <- cnt + 1
-                    
-                if cnt < res.Length then System.Array.Resize(&res, cnt)
-                res
-                
-        let toTupleArrayV (l : list<struct('a * 'b)>) =
-            match l with
-            | [] -> [||]
-            | [struct(k,v)] -> [| struct(k,v) |]
-            | struct(k0, v0)::l ->
-                let mutable res = Array.zeroCreate 16
-                res.[0] <- struct(k0, v0)
-                let mutable cnt = 1
-                for struct(k, v) in l do
-                    if cnt >= res.Length then 
-                        let len = res.Length <<< 1
-                        System.Array.Resize(&res, len)
-                    res.[cnt] <- struct(k,v)
-                    cnt <- cnt + 1
-                    
-                if cnt < res.Length then System.Array.Resize(&res, cnt)
-                res
-
     [<AbstractClass>]
     type Node<'Key, 'Value>() =
         abstract member Count : int
@@ -579,49 +384,49 @@ module MapNewImplementation =
 
             override x.Add(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c0 = comparer.Compare(key, x.K0)
-                let c1 = comparer.Compare(key, x.K1)
-
-                if c0 > 0 && c1 > 0 then
-                    MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
-                elif c0 > 0 && c1 < 0 then
-                    MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
-                elif c0 < 0 && c1 < 0 then
+                if c0 < 0 then
                     MapInner(MapLeaf(key, value), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
                 elif c0 = 0 then
                     MapTwo(key, value, x.K1, x.V1) :> Node<_,_>
-                elif c1 = 0 then
-                    MapTwo(x.K0, x.V0, key, value) :> Node<_,_>
                 else
-                    failwith "inconsistent"
+                    let c1 = comparer.Compare(key, x.K1)
+                    if c1 > 0 then
+                        MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
+                    elif c1 = 0 then
+                        MapTwo(x.K0, x.V0, key, value) :> Node<_,_>
+                    else
+                        MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+
                     
             override x.Remove(comparer : IComparer<'Key>, key : 'Key) =
                 let c0 = comparer.Compare(key, x.K0)
-                let c1 = comparer.Compare(key, x.K1)
-
                 if c0 = 0 then MapLeaf(x.K1, x.V1) :> Node<_,_>
-                elif c1 = 0 then MapLeaf(x.K0, x.V0) :> Node<_,_>
-                else x :> Node<_,_>
+                elif c0 < 0 then x :> Node<_,_>
+                else
+                    let c1 = comparer.Compare(key, x.K1)
+                    if c1 = 0 then MapLeaf(x.K0, x.V0) :> Node<_,_>
+                    else x :> Node<_,_>
+
                
             override x.AddInPlace(comparer : IComparer<'Key>, key : 'Key, value : 'Value) =
                 let c0 = comparer.Compare(key, x.K0)
-                let c1 = comparer.Compare(key, x.K1)
-
-                if c0 > 0 && c1 > 0 then
-                    MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
-                elif c0 > 0 && c1 < 0 then
-                    MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
-                elif c0 < 0 && c1 < 0 then
+                if c0 < 0 then
                     MapInner(MapLeaf(key, value), x.K0, x.V0, MapLeaf(x.K1, x.V1)) :> Node<_,_>
                 elif c0 = 0 then
-                    x.K1 <- key
-                    x.V1 <- value
-                    x :> Node<_,_>
-                elif c1 = 0 then
                     x.K0 <- key
                     x.V0 <- value
                     x :> Node<_,_>
                 else
-                    failwith "inconsistent"
+                    let c1 = comparer.Compare(key, x.K1)
+                    if c1 > 0 then
+                        MapInner(MapLeaf(x.K0, x.V0), x.K1, x.V1, MapLeaf(key, value)) :> Node<_,_>
+                    elif c1 = 0 then
+                        x.K1 <- key
+                        x.V1 <- value
+                        x :> Node<_,_>
+                    else
+                        MapInner(MapLeaf(x.K0, x.V0), key, value, MapLeaf(x.K1, x.V1)) :> Node<_,_>
+
 
             override x.Map(mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T>) =
                 MapTwo(x.K0, mapping.Invoke(x.K0, x.V0), x.K1, mapping.Invoke(x.K1, x.V1)) :> Node<_,_>
@@ -1350,11 +1155,17 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     static member private CreateTree(cmp : IComparer<'Key>, arr : ('Key * 'Value)[], cnt : int)=
         let rec create (arr : ('Key * 'Value)[]) (l : int) (r : int) =
-            if l = r then
+            if l > r then
+                MapEmpty.Instance
+            elif l = r then
                 let (k,v) = arr.[l]
                 MapLeaf(k, v) :> Node<_,_>
-            elif l > r then
-                MapEmpty.Instance
+            #if TWO
+            elif l + 1 = r then
+                let (k0, v0) = arr.[l]
+                let (k1, v1) = arr.[r]
+                MapTwo(k0, v0, k1, v1) :> Node<_,_>
+            #endif
             else
                 let m = (l+r)/2
                 let (k,v) = arr.[m]
@@ -1371,6 +1182,12 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             if l = r then
                 let struct(k,v) = arr.[l]
                 MapLeaf(k, v) :> Node<_,_>
+            #if TWO
+            elif l + 1 = r then
+                let struct(k0, v0) = arr.[l]
+                let struct(k1, v1) = arr.[r]
+                MapTwo(k0, v0, k1, v1) :> Node<_,_>
+            #endif
             elif l > r then
                 MapEmpty.Instance
             else
@@ -1385,147 +1202,380 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         MapNew(cmp, create arr 0 (cnt-1))
 
     static member FromArray (elements : array<'Key * 'Value>) =
-        if elements.Length <= 0 then
-            MapNew(defaultComparer, MapEmpty.Instance)
-
-        elif elements.Length = 1 then
+        let cmp = defaultComparer
+        match elements.Length with
+        | 0 -> 
+            MapNew(cmp, MapEmpty.Instance)
+        | 1 ->
             let (k,v) = elements.[0]
-            MapNew(defaultComparer, MapLeaf(k, v))
-            
-        elif elements.Length = 2 then
+            MapNew(cmp, MapLeaf(k, v))
+        | 2 -> 
             let (k0,v0) = elements.[0]
             let (k1,v1) = elements.[1]
-            let cmp = defaultComparer
             let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-
-        elif elements.Length <= 5 then
-            let mutable res = MapEmpty.Instance
-            let cmp = defaultComparer
-            for (k,v) in elements do
-                res <- res.AddInPlace(cmp, k,v)
-            MapNew(cmp, res)
-        else
-            let cmp = defaultComparer
-            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicates false cmp
+            #if TWO
+            if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+            elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+            else MapNew(cmp, MapLeaf(k1, v1))
+            #else
+            if c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+            elif c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+            else MapNew(cmp, MapLeaf(k1, v1))
+            #endif
+        | 3 ->
+            let (k0,v0) = elements.[0]
+            let (k1,v1) = elements.[1]
+            let (k2,v2) = elements.[2]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+        | 4 ->
+            let (k0,v0) = elements.[0]
+            let (k1,v1) = elements.[1]
+            let (k2,v2) = elements.[2]
+            let (k3,v3) = elements.[3]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+        | 5 ->
+            let (k0,v0) = elements.[0]
+            let (k1,v1) = elements.[1]
+            let (k2,v2) = elements.[2]
+            let (k3,v3) = elements.[3]
+            let (k4,v4) = elements.[4]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+        | _ ->
+            let struct(arr, cnt) = Sorting.mergeSortHandleDuplicates false cmp elements elements.Length
             MapNew.CreateTree(cmp, arr, cnt)
         
     static member FromArrayV (elements : array<struct('Key * 'Value)>) =
-        if elements.Length <= 0 then
-            MapNew(defaultComparer, MapEmpty.Instance)
-
-        elif elements.Length = 1 then
+        let cmp = defaultComparer
+        match elements.Length with
+        | 0 -> 
+            MapNew(cmp, MapEmpty.Instance)
+        | 1 ->
             let struct(k,v) = elements.[0]
-            MapNew(defaultComparer, MapLeaf(k, v))
-            
-        elif elements.Length = 2 then
+            MapNew(cmp, MapLeaf(k, v))
+        | 2 -> 
             let struct(k0,v0) = elements.[0]
             let struct(k1,v1) = elements.[1]
-            let cmp = defaultComparer
             let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-
-        elif elements.Length <= 5 then
-            let mutable res = MapEmpty.Instance
-            let cmp = defaultComparer
-            for (k,v) in elements do
-                res <- res.AddInPlace(cmp, k,v)
-            MapNew(cmp, res)
-        else
-            let cmp = defaultComparer
-            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicatesV false cmp
+            #if TWO
+            if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+            elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+            else MapNew(cmp, MapLeaf(k1, v1))
+            #else
+            if c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+            elif c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+            else MapNew(cmp, MapLeaf(k1, v1))
+            #endif
+        | 3 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+        | 4 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            let struct(k3,v3) = elements.[3]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+        | 5 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            let struct(k3,v3) = elements.[3]
+            let struct(k4,v4) = elements.[4]
+            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+        | _ ->
+            let struct(arr, cnt) = Sorting.mergeSortHandleDuplicatesV false cmp elements elements.Length
             MapNew.CreateTree(cmp, arr, cnt)
-
-    static member FromSeq (elements : seq<'Key * 'Value>) =
-        let cmp = defaultComparer
-        let arr = elements |> Seq.toTupleArray
-        if arr.Length <= 0 then
-            MapNew(cmp, MapEmpty.Instance)
-        elif arr.Length = 1 then
-            let (k,v) = arr.[0]
-            MapNew(cmp, MapLeaf(k, v))
-        elif arr.Length = 2 then
-            let (k0, v0) = arr.[0]
-            let (k1, v1) = arr.[1]
-            let cmp = defaultComparer
-            let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-                
-        elif arr.Length <= 5 then
-            let mutable map = MapEmpty.Instance
-            let cmp = defaultComparer
-            for (k,v) in arr do
-                map <- map.AddInPlace(cmp, k, v)
-            MapNew(cmp, map)
-        else
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-
-    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
-        let cmp = defaultComparer
-        let arr = elements |> Seq.toTupleArrayV
-        if arr.Length <= 0 then
-            MapNew(cmp, MapEmpty.Instance)
-        elif arr.Length = 1 then
-            let struct(k,v) = arr.[0]
-            MapNew(cmp, MapLeaf(k, v))
-        elif arr.Length = 2 then
-            let struct(k0, v0) = arr.[0]
-            let struct(k1, v1) = arr.[1]
-            let cmp = defaultComparer
-            let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-                
-        elif arr.Length <= 5 then
-            let mutable map = MapEmpty.Instance
-            let cmp = defaultComparer
-            for struct(k,v) in arr do
-                map <- map.AddInPlace(cmp, k, v)
-            MapNew(cmp, map)
-        else
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-
+        
     static member FromList (elements : list<'Key * 'Value>) =
+        let rec atMost (cnt : int) (l : list<_>) =
+            match l with
+            | [] -> true
+            | _ :: t ->
+                if cnt > 0 then atMost (cnt - 1) t
+                else false
+
+        let cmp = defaultComparer
         match elements with
-        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
-        | [(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
-        | elements ->
-            let cmp = defaultComparer
-            let arr = elements |> List.toTupleArray
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
+        | [] -> 
+            // cnt = 0
+            MapNew(cmp, MapEmpty.Instance)
+
+        | ((k0, v0) as t0) :: rest ->
+            // cnt >= 1
+            match rest with
+            | [] -> 
+                // cnt = 1
+                MapNew(cmp, MapLeaf(k0, v0))
+            | ((k1, v1) as t1) :: rest ->
+                // cnt >= 2
+                match rest with
+                | [] ->
+                    // cnt = 2
+                    let c = cmp.Compare(k0, k1)
+                    #if TWO
+                    if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+                    elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                    #else
+                    if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                    elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                    #endif
+                | ((k2, v2) as t2) :: rest ->
+                    // cnt >= 3
+                    match rest with
+                    | [] ->
+                        // cnt = 3
+                        MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    | ((k3, v3) as t3) :: rest ->
+                        // cnt >= 4
+                        match rest with
+                        | [] ->
+                            // cnt = 4
+                            MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        | ((k4, v4) as t4) :: rest ->
+                            // cnt >= 5
+                            match rest with
+                            | [] ->
+                                // cnt = 5
+                                MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+                            | t5 :: rest ->
+                                // cnt >= 6
+                                let mutable arr = Array.zeroCreate 16
+                                let mutable cnt = 6
+                                arr.[0] <- t0
+                                arr.[1] <- t1
+                                arr.[2] <- t2
+                                arr.[3] <- t3
+                                arr.[4] <- t4
+                                arr.[5] <- t5
+                                for t in rest do
+                                    if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                    arr.[cnt] <- t
+                                    cnt <- cnt + 1
+                                    
+                                let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicates true cmp arr cnt
+                                MapNew.CreateTree(cmp, arr1, cnt1)
+                                
+                                
+                    
+                
 
     static member FromListV (elements : list<struct('Key * 'Value)>) =
+        let rec atMost (cnt : int) (l : list<_>) =
+            match l with
+            | [] -> true
+            | _ :: t ->
+                if cnt > 0 then atMost (cnt - 1) t
+                else false
+
+        let cmp = defaultComparer
         match elements with
-        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
-        | [struct(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
-        | elements ->
+        | [] -> 
+            // cnt = 0
+            MapNew(cmp, MapEmpty.Instance)
+
+        | struct(k0, v0) :: rest ->
+            // cnt >= 1
+            match rest with
+            | [] -> 
+                // cnt = 1
+                MapNew(cmp, MapLeaf(k0, v0))
+            | struct(k1, v1) :: rest ->
+                // cnt >= 2
+                match rest with
+                | [] ->
+                    // cnt = 2
+                    let c = cmp.Compare(k0, k1)
+                    #if TWO
+                    if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+                    elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                    #else
+                    if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                    elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                    #endif
+                | struct(k2, v2) :: rest ->
+                    // cnt >= 3
+                    match rest with
+                    | [] ->
+                        // cnt = 3
+                        MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    | struct(k3, v3) :: rest ->
+                        // cnt >= 4
+                        match rest with
+                        | [] ->
+                            // cnt = 4
+                            MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        | struct(k4, v4) :: rest ->
+                            // cnt >= 5
+                            match rest with
+                            | [] ->
+                                // cnt = 5
+                                MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+                            | t5 :: rest ->
+                                // cnt >= 6
+                                let mutable arr = Array.zeroCreate 16
+                                let mutable cnt = 6
+                                arr.[0] <- struct(k0, v0)
+                                arr.[1] <- struct(k1, v1)
+                                arr.[2] <- struct(k2, v2)
+                                arr.[3] <- struct(k3, v3)
+                                arr.[4] <- struct(k4, v4)
+                                arr.[5] <- t5
+                                for t in rest do
+                                    if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                    arr.[cnt] <- t
+                                    cnt <- cnt + 1
+                                    
+                                let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicatesV true cmp arr cnt
+                                MapNew.CreateTree(cmp, arr1, cnt1)
+ 
+    static member FromSeq (elements : seq<'Key * 'Value>) =
+        match elements with
+        | :? array<'Key * 'Value> as e -> MapNew.FromArray e
+        | :? list<'Key * 'Value> as e -> MapNew.FromList e
+        | _ ->
             let cmp = defaultComparer
-            let arr = elements |> List.toTupleArrayV
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-            
+            use e = elements.GetEnumerator()
+            if e.MoveNext() then
+                // cnt >= 1
+                let t0 = e.Current
+                let (k0,v0) = t0
+                if e.MoveNext() then
+                    // cnt >= 2
+                    let t1 = e.Current
+                    let (k1,v1) = t1
+                    if e.MoveNext() then
+                        // cnt >= 3 
+                        let t2 = e.Current
+                        let (k2,v2) = t2
+                        if e.MoveNext() then
+                            // cnt >= 4
+                            let t3 = e.Current
+                            let (k3, v3) = t3
+                            if e.MoveNext() then
+                                // cnt >= 5
+                                let t4 = e.Current
+                                let (k4, v4) = t4
+                                if e.MoveNext() then
+                                    // cnt >= 6
+                                    let mutable arr = Array.zeroCreate 16
+                                    let mutable cnt = 6
+                                    arr.[0] <- t0
+                                    arr.[1] <- t1
+                                    arr.[2] <- t2
+                                    arr.[3] <- t3
+                                    arr.[4] <- t4
+                                    arr.[5] <- e.Current
+
+                                    while e.MoveNext() do
+                                        if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                        arr.[cnt] <- e.Current
+                                        cnt <- cnt + 1
+
+                                    let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicates true cmp arr cnt
+                                    MapNew.CreateTree(cmp, arr1, cnt1)
+
+                                else
+                                    // cnt = 5
+                                    MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+
+                            else
+                                // cnt = 4
+                                MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        else
+                            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    else
+                        // cnt = 2
+                        let c = cmp.Compare(k0, k1)
+                        #if TWO
+                        if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+                        elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                        #else
+                        if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                        elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                        #endif
+                else
+                    // cnt = 1
+                    MapNew(cmp, MapLeaf(k0, v0))
+
+            else
+                MapNew(cmp, MapEmpty.Instance)
+
+    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
+        match elements with
+        | :? array<struct('Key * 'Value)> as e -> MapNew.FromArrayV e
+        | :? list<struct('Key * 'Value)> as e -> MapNew.FromListV e
+        | _ ->
+            let cmp = defaultComparer
+            use e = elements.GetEnumerator()
+            if e.MoveNext() then
+                // cnt >= 1
+                let struct(k0,v0) = e.Current
+                if e.MoveNext() then
+                    // cnt >= 2
+                    let struct(k1,v1) = e.Current
+                    if e.MoveNext() then
+                        // cnt >= 3 
+                        let struct(k2,v2) = e.Current
+                        if e.MoveNext() then
+                            // cnt >= 4
+                            let struct(k3, v3) = e.Current
+                            if e.MoveNext() then
+                                // cnt >= 5
+                                let struct(k4, v4) = e.Current
+                                if e.MoveNext() then
+                                    // cnt >= 6
+                                    let mutable arr = Array.zeroCreate 16
+                                    let mutable cnt = 6
+                                    arr.[0] <- struct(k0, v0)
+                                    arr.[1] <- struct(k1, v1)
+                                    arr.[2] <- struct(k2, v2)
+                                    arr.[3] <- struct(k3, v3)
+                                    arr.[4] <- struct(k4, v4)
+                                    arr.[5] <- e.Current
+
+                                    while e.MoveNext() do
+                                        if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                        arr.[cnt] <- e.Current
+                                        cnt <- cnt + 1
+
+                                    let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicatesV true cmp arr cnt
+                                    MapNew.CreateTree(cmp, arr1, cnt1)
+
+                                else
+                                    // cnt = 5
+                                    MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+
+                            else
+                                // cnt = 4
+                                MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        else
+                            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    else
+                        // cnt = 2
+                        let c = cmp.Compare(k0, k1)
+                        #if TWO
+                        if c < 0 then MapNew(cmp, MapTwo(k0, v0, k1, v1))
+                        elif c > 0 then MapNew(cmp, MapTwo(k1, v1, k0, v0))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                        #else
+                        if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                        elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                        #endif
+                else
+                    // cnt = 1
+                    MapNew(cmp, MapLeaf(k0, v0))
+
+            else
+                MapNew(cmp, MapEmpty.Instance)
+
             
     member x.Count = root.Count
     member x.Root = root
@@ -1546,6 +1596,11 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 iter action n.Right
             | :? MapLeaf<'Key, 'Value> as n ->
                 action.Invoke(n.Key, n.Value)
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                action.Invoke(n.K0, n.V0)
+                action.Invoke(n.K1, n.V1)
+            #endif
             | _ ->
                 ()
         iter action root
@@ -1576,6 +1631,11 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 exists predicate n.Right
             | :? MapLeaf<'Key, 'Value> as n ->
                 predicate.Invoke(n.Key, n.Value)
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                predicate.Invoke(n.K0, n.V0) ||
+                predicate.Invoke(n.K1, n.V1)
+            #endif
             | _ ->
                 false
         exists predicate root
@@ -1589,6 +1649,11 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 forall predicate n.Right
             | :? MapLeaf<'Key, 'Value> as n ->
                 predicate.Invoke(n.Key, n.Value)
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                predicate.Invoke(n.K0, n.V0) &&
+                predicate.Invoke(n.K1, n.V1)
+            #endif
             | _ ->
                 true
         let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
@@ -1605,6 +1670,10 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 fold folder s2 n.Right
             | :? MapLeaf<'Key, 'Value> as n ->
                 folder.Invoke(seed, n.Key, n.Value)
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                folder.Invoke(folder.Invoke(seed, n.K0, n.V0), n.K1, n.V1)
+            #endif
             | _ ->
                 seed
 
@@ -1621,6 +1690,10 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 foldBack folder s2 n.Left
             | :? MapLeaf<'Key, 'Value> as n ->
                 folder.Invoke(n.Key, n.Value, seed)
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                folder.Invoke(n.K0, n.V0, folder.Invoke(n.K1, n.V1, seed))
+            #endif
             | _ ->
                 seed
 
@@ -1638,6 +1711,17 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 let c = cmp.Compare(key, n.Key)
                 if c = 0 then Some n.Value
                 else None
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.K0)
+                if c < 0 then None
+                elif c > 0 then
+                    let c = cmp.Compare(key, n.K1)
+                    if c = 0 then Some n.V1
+                    else None
+                else
+                    Some n.V0
+            #endif
             | _ ->
                 None
         tryFind comparer key root
@@ -1654,6 +1738,17 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 let c = cmp.Compare(key, n.Key)
                 if c = 0 then ValueSome n.Value
                 else ValueNone
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.K0)
+                if c < 0 then ValueNone
+                elif c > 0 then
+                    let c = cmp.Compare(key, n.K1)
+                    if c = 0 then ValueSome n.V1
+                    else ValueNone
+                else
+                    ValueSome n.V0
+            #endif
             | _ ->
                 ValueNone
         tryFind comparer key root
@@ -1670,6 +1765,17 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 let c = cmp.Compare(key, n.Key)
                 if c = 0 then true
                 else false
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.K0)
+                if c < 0 then false
+                elif c > 0 then
+                    let c = cmp.Compare(key, n.K1)
+                    c = 0
+                else    
+                    true
+            #endif
+
             | _ ->
                 false
         contains comparer key root
@@ -1683,6 +1789,10 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 toList ((n.Key, n.Value) :: toList acc n.Right) n.Left
             | :? MapLeaf<'Key, 'Value> as n ->
                 (n.Key, n.Value) :: acc
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                (n.K0, n.V0) :: (n.K1, n.V1) :: acc
+            #endif
             | _ ->
                 acc
         toList [] root
@@ -1694,6 +1804,10 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 toList (struct(n.Key, n.Value) :: toList acc n.Right) n.Left
             | :? MapLeaf<'Key, 'Value> as n ->
                 struct(n.Key, n.Value) :: acc
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                struct(n.K0, n.V0) :: struct(n.K1, n.V1) :: acc
+            #endif
             | _ ->
                 acc
         toList [] root
@@ -1710,6 +1824,13 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             | :? MapLeaf<'Key, 'Value> as n ->
                 arr.[!index] <- n.Key, n.Value
                 index := !index + 1
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let i = !index
+                arr.[i] <- (n.K0, n.V0)
+                arr.[i+1] <- (n.K1, n.V1)
+                index := i + 2
+            #endif
             | _ ->
                 ()
 
@@ -1729,6 +1850,13 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             | :? MapLeaf<'Key, 'Value> as n ->
                 arr.[!index] <- struct(n.Key, n.Value)
                 index := !index + 1
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let i = !index
+                arr.[i] <- struct(n.K0, n.V0)
+                arr.[i+1] <- struct(n.K1, n.V1)
+                index := i + 2
+            #endif
             | _ ->
                 ()
 
@@ -1746,7 +1874,22 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.GetViewBetween(minInclusive : 'Key, maxInclusive : 'Key) = 
         MapNew(comparer, root.GetViewBetween(comparer, minInclusive, true, maxInclusive, true))
-        
+       
+    member x.GetSlice(min : option<'Key>, max : option<'Key>) =
+        match min with
+        | Some min ->
+            match max with
+            | Some max ->
+                x.GetViewBetween(min, max)
+            | None ->
+                x.WithMin min
+        | None ->
+            match max with
+            | Some max ->
+                x.WithMax max
+            | None ->
+                x
+
     member x.WithMin(minInclusive : 'Key) = 
         MapNew(comparer, root.WithMin(comparer, minInclusive, true))
         

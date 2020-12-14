@@ -5,9 +5,9 @@ open System.Collections.Generic
 module Sorting =
 
 
-    let inline private mergeSeq (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) =
+    let inline private mergeSeq (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) (length : int) =
         let le = ri
-        let re = min src.Length (ri + len)
+        let re = min length (ri + len)
         let mutable oi = li
         let mutable li = li
         let mutable ri = ri
@@ -47,9 +47,9 @@ module Sorting =
             oi <- oi + 1
             ri <- ri + 1
 
-    let inline private mergeSeqHandleDuplicates (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) =
+    let inline private mergeSeqHandleDuplicates (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : ('Key * 'Value)[]) (dst : ('Key * 'Value)[]) (length : int) =
         let le = ri
-        let re = min src.Length (ri + len)
+        let re = min length (ri + len)
         let start = li
         let mutable oi = li
         let mutable li = li
@@ -101,20 +101,20 @@ module Sorting =
 
 
 
-    let mergeSort (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) =
-        if arr.Length <= 1 then 
+    let mergeSort (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) (length : int)=
+        if length <= 1 then 
             arr
         else
-            let mutable src = Array.zeroCreate arr.Length
+            let mutable src = Array.zeroCreate length
             let mutable dst = 
                 // mutateArray => allowed to mutate arr
                 if mutateArray then arr
-                else Array.zeroCreate arr.Length
+                else Array.zeroCreate length
 
             // copy to sorted pairs
             let mutable i0 = 0
             let mutable i1 = 1
-            while i1 < arr.Length do
+            while i1 < length do
                 let va = arr.[i0]
                 let ka,_ = va 
                 let vb = arr.[i1]
@@ -131,24 +131,24 @@ module Sorting =
                 i0 <- i0 + 2
                 i1 <- i1 + 2
 
-            if i0 < arr.Length then
+            if i0 < length then
                 src.[i0] <- arr.[i0]
                 i0 <- i0 + 1
 
             // merge sorted parts of length `sortedLength`
             let mutable sortedLength = 2
-            while sortedLength < arr.Length do
+            while sortedLength < length do
                 let mutable li = 0
                 let mutable ri = sortedLength
 
                 // merge case
-                while ri < arr.Length do
-                    mergeSeq cmp li ri sortedLength src dst
+                while ri < length do
+                    mergeSeq cmp li ri sortedLength src dst length
                     li <- ri + sortedLength
                     ri <- li + sortedLength
 
                 // right got empty
-                while li < arr.Length do
+                while li < length do
                     dst.[li] <- src.[li]
                     li <- li + 1
                     
@@ -162,17 +162,17 @@ module Sorting =
 
             src
 
-    let mergeSortHandleDuplicates (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) =
-        let mutable src = Array.zeroCreate arr.Length
+    let mergeSortHandleDuplicates (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) (length : int) =
+        let mutable src = Array.zeroCreate length
         let mutable dst = 
             // mutateArray => allowed to mutate arr
             if mutateArray then arr
-            else Array.zeroCreate arr.Length
+            else Array.zeroCreate length
 
         // copy to sorted pairs
         let mutable i0 = 0
         let mutable i1 = 1
-        while i1 < arr.Length do
+        while i1 < length do
             let va = arr.[i0]
             let ka,_ = va 
             let vb = arr.[i1]
@@ -189,7 +189,7 @@ module Sorting =
             i0 <- i0 + 2
             i1 <- i1 + 2
 
-        if i0 < arr.Length then
+        if i0 < length then
             src.[i0] <- arr.[i0]
             i0 <- i0 + 1
 
@@ -198,18 +198,18 @@ module Sorting =
         // merge sorted parts of length `sortedLength`
         let mutable sortedLength = 2
         let mutable sortedLengthDbl = 4
-        while sortedLengthDbl < src.Length do
+        while sortedLengthDbl < length do
             let mutable li = 0
             let mutable ri = sortedLength
 
             // merge case
-            while ri < src.Length do
-                mergeSeq cmp li ri sortedLength src dst
+            while ri < length do
+                mergeSeq cmp li ri sortedLength src dst length
                 li <- ri + sortedLength
                 ri <- li + sortedLength
 
             // right got empty
-            while li < src.Length do
+            while li < length do
                 dst.[li] <- src.[li]
                 li <- li + 1
                     
@@ -222,12 +222,12 @@ module Sorting =
             src <- t
 
         // final merge-dedup run
-        let cnt = mergeSeqHandleDuplicates cmp 0 sortedLength sortedLength src dst
+        let cnt = mergeSeqHandleDuplicates cmp 0 sortedLength sortedLength src dst length
         struct(dst, cnt)
 
-    let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) =
+    let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) (length : int) =
         let le = ri
-        let re = min src.Length (ri + len)
+        let re = min length (ri + len)
         let mutable oi = li
         let mutable li = li
         let mutable ri = ri
@@ -263,9 +263,9 @@ module Sorting =
             oi <- oi + 1
             ri <- ri + 1
 
-    let inline private mergeSeqHandleDuplicatesV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) =
+    let inline private mergeSeqHandleDuplicatesV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) (length : int) =
         let le = ri
-        let re = min src.Length (ri + len)
+        let re = min length (ri + len)
         let start = li
         let mutable oi = li
         let mutable li = li
@@ -312,20 +312,21 @@ module Sorting =
 
         oi
 
-    let mergeSortV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) =
-        if arr.Length <= 1 then 
+    // TODO!!!!!
+    let mergeSortV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) (length : int) =
+        if length <= 1 then 
             arr
         else
-            let mutable src = Array.zeroCreate arr.Length
+            let mutable src = Array.zeroCreate length
             let mutable dst = 
                 // mutateArray => allowed to mutate arr
                 if mutateArray then arr
-                else Array.zeroCreate arr.Length
+                else Array.zeroCreate length
 
             // copy to sorted pairs
             let mutable i0 = 0
             let mutable i1 = 1
-            while i1 < arr.Length do
+            while i1 < length do
                 let struct(ka,va) = arr.[i0]
                 let struct(kb,vb) = arr.[i1]
 
@@ -340,24 +341,24 @@ module Sorting =
                 i0 <- i0 + 2
                 i1 <- i1 + 2
 
-            if i0 < arr.Length then
+            if i0 < length then
                 src.[i0] <- arr.[i0]
                 i0 <- i0 + 1
                 
             // merge sorted parts of length `sortedLength`
             let mutable sortedLength = 2
-            while sortedLength < arr.Length do
+            while sortedLength < length do
                 let mutable li = 0
                 let mutable ri = sortedLength
 
                 // merge case
-                while ri < arr.Length do
-                    mergeSeqV cmp li ri sortedLength src dst
+                while ri < length do
+                    mergeSeqV cmp li ri sortedLength src dst length
                     li <- ri + sortedLength
                     ri <- li + sortedLength
 
                 // right got empty
-                while li < arr.Length do
+                while li < length do
                     dst.[li] <- src.[li]
                     li <- li + 1
 
@@ -372,17 +373,17 @@ module Sorting =
 
             src
 
-    let mergeSortHandleDuplicatesV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) =
-        let mutable src = Array.zeroCreate arr.Length
+    let mergeSortHandleDuplicatesV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) (length : int) =
+        let mutable src = Array.zeroCreate length
         let mutable dst = 
             // mutateArray => allowed to mutate arr
             if mutateArray then arr
-            else Array.zeroCreate arr.Length
+            else Array.zeroCreate length
 
         // copy to sorted pairs
         let mutable i0 = 0
         let mutable i1 = 1
-        while i1 < arr.Length do
+        while i1 < length do
             let struct(ka,va) = arr.[i0] 
             let struct(kb,vb) = arr.[i1]
 
@@ -397,7 +398,7 @@ module Sorting =
             i0 <- i0 + 2
             i1 <- i1 + 2
 
-        if i0 < arr.Length then
+        if i0 < length then
             src.[i0] <- arr.[i0]
             i0 <- i0 + 1
 
@@ -406,18 +407,18 @@ module Sorting =
         // merge sorted parts of length `sortedLength`
         let mutable sortedLength = 2
         let mutable sortedLengthDbl = 4
-        while sortedLengthDbl <= src.Length do
+        while sortedLengthDbl <= length do
             let mutable li = 0
             let mutable ri = sortedLength
 
             // merge case
-            while ri < src.Length do
-                mergeSeqV cmp li ri sortedLength src dst
+            while ri < length do
+                mergeSeqV cmp li ri sortedLength src dst length
                 li <- ri + sortedLength
                 ri <- li + sortedLength
 
             // right got empty
-            while li < src.Length do
+            while li < length do
                 dst.[li] <- src.[li]
                 li <- li + 1
                     
@@ -429,14 +430,14 @@ module Sorting =
             dst <- src
             src <- t
 
-        if sortedLength < src.Length then
-            let cnt = mergeSeqHandleDuplicatesV cmp 0 sortedLength sortedLength src dst
+        if sortedLength < length then
+            let cnt = mergeSeqHandleDuplicatesV cmp 0 sortedLength sortedLength src dst length
             struct(dst, cnt)
         else
             let mutable i = 1
             let mutable o = 1
             let mutable struct(lastKey,_) = src.[0]
-            while i < src.Length do
+            while i < length do
                 let struct(k,v) = src.[i]
                 if cmp.Compare(lastKey, k) = 0 then
                     src.[o-1] <- struct(k,v)
