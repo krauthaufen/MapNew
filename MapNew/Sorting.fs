@@ -198,7 +198,7 @@ module Sorting =
         // merge sorted parts of length `sortedLength`
         let mutable sortedLength = 2
         let mutable sortedLengthDbl = 4
-        while sortedLengthDbl <= src.Length do
+        while sortedLengthDbl < src.Length do
             let mutable li = 0
             let mutable ri = sortedLength
 
@@ -221,26 +221,9 @@ module Sorting =
             dst <- src
             src <- t
 
-        if sortedLength < src.Length then
-            let cnt = mergeSeqHandleDuplicates cmp 0 sortedLength sortedLength src dst
-            struct(dst, cnt)
-        else
-            let mutable i = 1
-            let mutable o = 1
-            let mutable (lastKey,_) = src.[0]
-            while i < src.Length do
-                let v = src.[i]
-                let (k,_) = v
-                if cmp.Compare(lastKey, k) = 0 then
-                    src.[o-1] <- v
-                else
-                    src.[o] <- v
-                    lastKey <- k
-                    o <- o + 1
-                i <- i + 1
-
-            struct(src, o)
-
+        // final merge-dedup run
+        let cnt = mergeSeqHandleDuplicates cmp 0 sortedLength sortedLength src dst
+        struct(dst, cnt)
 
     let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) =
         let le = ri
