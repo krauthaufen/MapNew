@@ -39,7 +39,7 @@ type SortBenchmark() =
 
     [<Benchmark>]
     member x.MergeSort() =
-        Sorting.mergeSort false cmp data
+        Sorting.mergeSortHandleDuplicates false cmp data data.Length
     
     [<Benchmark>]
     member x.TimSort() =

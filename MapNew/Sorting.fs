@@ -11,31 +11,29 @@ module Sorting =
         let mutable oi = li
         let mutable li = li
         let mutable ri = ri
-        let mutable lv = src.[li]
-        let mutable (lk, _) = lv
-        let mutable rv = src.[ri]
-        let mutable (rk, _) = rv
 
         while li < le && ri < re do
-            let c = cmp.Compare(lk, rk)
+            let lv = src.[li]
+            let rv = src.[ri]
+            let c = cmp.Compare(fst lv, fst rv)
             if c <= 0 then
                 dst.[oi] <- lv
                 oi <- oi + 1
                 li <- li + 1
-                if li < le then
-                    let v = src.[li]
-                    let (k, _) = v
-                    lk <- k
-                    lv <- v
+                //if li < le then
+                //    let v = src.[li]
+                //    let (k, _) = v
+                //    lk <- k
+                //    lv <- v
             else
                 dst.[oi] <- rv
                 oi <- oi + 1
                 ri <- ri + 1
-                if ri < re then
-                    let v = src.[ri]
-                    let (k, _) = v
-                    rk <- k
-                    rv <- v
+                //if ri < re then
+                //    let v = src.[ri]
+                //    let (k, _) = v
+                //    rk <- k
+                //    rv <- v
 
         while li < le do
             dst.[oi] <- src.[li]
@@ -54,40 +52,37 @@ module Sorting =
         let mutable oi = li
         let mutable li = li
         let mutable ri = ri
-        let mutable lv = src.[li]
-        let mutable (lk, _) = lv
-        let mutable rv = src.[ri]
-        let mutable (rk, _) = rv
-        let mutable lastKey = Unchecked.defaultof<'Key>
+        let mutable lastValue = Unchecked.defaultof<'Key * 'Value>
 
         let inline append (v : ('Key * 'Value)) =
-            let k,_ = v
-            if oi > start && cmp.Compare(k, lastKey) = 0 then
+            if oi > start && cmp.Compare(fst v, fst lastValue) = 0 then
                 dst.[oi-1] <- v
-                lastKey <- k
+                lastValue <- v
             else
                 dst.[oi] <- v
-                lastKey <- k
+                lastValue <- v
                 oi <- oi + 1
 
         while li < le && ri < re do
-            let c = cmp.Compare(lk, rk)
+            let lv = src.[li]
+            let rv = src.[ri]
+            let c = cmp.Compare(fst lv, fst rv)
             if c <= 0 then
                 append lv
                 li <- li + 1
-                if li < le then
-                    let v = src.[li]
-                    let (k, _) = v
-                    lk <- k
-                    lv <- v
+                //if li < le then
+                //    let v = src.[li]
+                //    let (k, _) = v
+                //    lk <- k
+                //    lv <- v
             else
                 append rv
                 ri <- ri + 1
-                if ri < re then
-                    let v = src.[ri]
-                    let (k, _) = v
-                    rk <- k
-                    rv <- v
+                //if ri < re then
+                //    let v = src.[ri]
+                //    let (k, _) = v
+                //    rk <- k
+                //    rv <- v
 
         while li < le do
             append src.[li]
@@ -98,69 +93,6 @@ module Sorting =
             ri <- ri + 1
 
         oi
-
-
-
-    let mergeSort (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) (length : int)=
-        if length <= 1 then 
-            arr
-        else
-            let mutable src = Array.zeroCreate length
-            let mutable dst = 
-                // mutateArray => allowed to mutate arr
-                if mutateArray then arr
-                else Array.zeroCreate length
-
-            // copy to sorted pairs
-            let mutable i0 = 0
-            let mutable i1 = 1
-            while i1 < length do
-                let va = arr.[i0]
-                let ka,_ = va 
-                let vb = arr.[i1]
-                let kb,_ = vb
-
-                let c = cmp.Compare(ka, kb)
-                if c <= 0 then
-                    src.[i0] <- va
-                    src.[i1] <- vb
-                else
-                    src.[i0] <- vb
-                    src.[i1] <- va
-                    
-                i0 <- i0 + 2
-                i1 <- i1 + 2
-
-            if i0 < length then
-                src.[i0] <- arr.[i0]
-                i0 <- i0 + 1
-
-            // merge sorted parts of length `sortedLength`
-            let mutable sortedLength = 2
-            while sortedLength < length do
-                let mutable li = 0
-                let mutable ri = sortedLength
-
-                // merge case
-                while ri < length do
-                    mergeSeq cmp li ri sortedLength src dst length
-                    li <- ri + sortedLength
-                    ri <- li + sortedLength
-
-                // right got empty
-                while li < length do
-                    dst.[li] <- src.[li]
-                    li <- li + 1
-                    
-                // sortedLength * 2
-                sortedLength <- sortedLength <<< 1
-                
-                // swap src and dst
-                let t = dst
-                dst <- src
-                src <- t
-
-            src
 
     let mergeSortHandleDuplicates (mutateArray : bool) (cmp : IComparer<'Key>) (arr : ('Key * 'Value)[]) (length : int) =
         let mutable src = Array.zeroCreate length
@@ -174,11 +106,8 @@ module Sorting =
         let mutable i1 = 1
         while i1 < length do
             let va = arr.[i0]
-            let ka,_ = va 
             let vb = arr.[i1]
-            let kb,_ = vb
-
-            let c = cmp.Compare(ka, kb)
+            let c = cmp.Compare(fst va, fst vb)
             if c <= 0 then
                 src.[i0] <- va
                 src.[i1] <- vb
@@ -227,15 +156,14 @@ module Sorting =
         else
             let mutable i = 1
             let mutable o = 1
-            let mutable (lastKey,_) = src.[0]
+            let mutable lastValue = src.[0]
             while i < length do
                 let v = src.[i]
-                let (k,_) = v
-                if cmp.Compare(lastKey, k) = 0 then
+                if cmp.Compare(fst lastValue, fst v) = 0 then
                     src.[o-1] <- v
                 else
                     src.[o] <- v
-                    lastKey <- k
+                    lastValue <- v
                     o <- o + 1
                 i <- i + 1
 
