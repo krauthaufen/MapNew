@@ -1412,7 +1412,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicates false cmp
+            let struct(arr, cnt) = Sorting.mergeSortHandleDuplicates false cmp elements elements.Length
             MapNew.CreateTree(cmp, arr, cnt)
         
     static member FromArrayV (elements : array<struct('Key * 'Value)>) =
@@ -1443,89 +1443,274 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             MapNew(cmp, res)
         else
             let cmp = defaultComparer
-            let struct(arr, cnt) = elements |> Sorting.mergeSortHandleDuplicatesV false cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-
-    static member FromSeq (elements : seq<'Key * 'Value>) =
-        let cmp = defaultComparer
-        let arr = elements |> Seq.toTupleArray
-        if arr.Length <= 0 then
-            MapNew(cmp, MapEmpty.Instance)
-        elif arr.Length = 1 then
-            let (k,v) = arr.[0]
-            MapNew(cmp, MapLeaf(k, v))
-        elif arr.Length = 2 then
-            let (k0, v0) = arr.[0]
-            let (k1, v1) = arr.[1]
-            let cmp = defaultComparer
-            let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-                
-        elif arr.Length <= 5 then
-            let mutable map = MapEmpty.Instance
-            let cmp = defaultComparer
-            for (k,v) in arr do
-                map <- map.AddInPlace(cmp, k, v)
-            MapNew(cmp, map)
-        else
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-
-    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
-        let cmp = defaultComparer
-        let arr = elements |> Seq.toTupleArrayV
-        if arr.Length <= 0 then
-            MapNew(cmp, MapEmpty.Instance)
-        elif arr.Length = 1 then
-            let struct(k,v) = arr.[0]
-            MapNew(cmp, MapLeaf(k, v))
-        elif arr.Length = 2 then
-            let struct(k0, v0) = arr.[0]
-            let struct(k1, v1) = arr.[1]
-            let cmp = defaultComparer
-            let c = cmp.Compare(k0, k1)
-            if c > 0 then
-                MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
-            elif c < 0 then
-                MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
-            else
-                MapNew(cmp, MapLeaf(k1, v1))
-                
-        elif arr.Length <= 5 then
-            let mutable map = MapEmpty.Instance
-            let cmp = defaultComparer
-            for struct(k,v) in arr do
-                map <- map.AddInPlace(cmp, k, v)
-            MapNew(cmp, map)
-        else
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
+            let struct(arr, cnt) = Sorting.mergeSortHandleDuplicatesV false cmp elements elements.Length
             MapNew.CreateTree(cmp, arr, cnt)
 
     static member FromList (elements : list<'Key * 'Value>) =
+        let rec atMost (cnt : int) (l : list<_>) =
+            match l with
+            | [] -> true
+            | _ :: t ->
+                if cnt > 0 then atMost (cnt - 1) t
+                else false
+
+        let cmp = defaultComparer
         match elements with
-        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
-        | [(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
-        | elements ->
-            let cmp = defaultComparer
-            let arr = elements |> List.toTupleArray
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicates true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
+        | [] -> 
+            // cnt = 0
+            MapNew(cmp, MapEmpty.Instance)
+
+        | ((k0, v0) as t0) :: rest ->
+            // cnt >= 1
+            match rest with
+            | [] -> 
+                // cnt = 1
+                MapNew(cmp, MapLeaf(k0, v0))
+            | ((k1, v1) as t1) :: rest ->
+                // cnt >= 2
+                match rest with
+                | [] ->
+                    // cnt = 2
+                    let c = cmp.Compare(k0, k1)
+                    if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                    elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                | ((k2, v2) as t2) :: rest ->
+                    // cnt >= 3
+                    match rest with
+                    | [] ->
+                        // cnt = 3
+                        MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    | ((k3, v3) as t3) :: rest ->
+                        // cnt >= 4
+                        match rest with
+                        | [] ->
+                            // cnt = 4
+                            MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        | ((k4, v4) as t4) :: rest ->
+                            // cnt >= 5
+                            match rest with
+                            | [] ->
+                                // cnt = 5
+                                MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+                            | t5 :: rest ->
+                                // cnt >= 6
+                                let mutable arr = Array.zeroCreate 16
+                                let mutable cnt = 6
+                                arr.[0] <- t0
+                                arr.[1] <- t1
+                                arr.[2] <- t2
+                                arr.[3] <- t3
+                                arr.[4] <- t4
+                                arr.[5] <- t5
+                                for t in rest do
+                                    if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                    arr.[cnt] <- t
+                                    cnt <- cnt + 1
+                                    
+                                let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicates true cmp arr cnt
+                                MapNew.CreateTree(cmp, arr1, cnt1)
+                                
+                                
+                    
+                
 
     static member FromListV (elements : list<struct('Key * 'Value)>) =
+        let rec atMost (cnt : int) (l : list<_>) =
+            match l with
+            | [] -> true
+            | _ :: t ->
+                if cnt > 0 then atMost (cnt - 1) t
+                else false
+
+        let cmp = defaultComparer
         match elements with
-        | [] -> MapNew(defaultComparer, MapEmpty.Instance)
-        | [struct(k,v)] -> MapNew(defaultComparer, MapLeaf(k, v))
-        | elements ->
+        | [] -> 
+            // cnt = 0
+            MapNew(cmp, MapEmpty.Instance)
+
+        | struct(k0, v0) :: rest ->
+            // cnt >= 1
+            match rest with
+            | [] -> 
+                // cnt = 1
+                MapNew(cmp, MapLeaf(k0, v0))
+            | struct(k1, v1) :: rest ->
+                // cnt >= 2
+                match rest with
+                | [] ->
+                    // cnt = 2
+                    let c = cmp.Compare(k0, k1)
+                    if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                    elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                    else MapNew(cmp, MapLeaf(k1, v1))
+                | struct(k2, v2) :: rest ->
+                    // cnt >= 3
+                    match rest with
+                    | [] ->
+                        // cnt = 3
+                        MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    | struct(k3, v3) :: rest ->
+                        // cnt >= 4
+                        match rest with
+                        | [] ->
+                            // cnt = 4
+                            MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        | struct(k4, v4) :: rest ->
+                            // cnt >= 5
+                            match rest with
+                            | [] ->
+                                // cnt = 5
+                                MapNew(cmp, MapLeaf(k0,v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+                            | t5 :: rest ->
+                                // cnt >= 6
+                                let mutable arr = Array.zeroCreate 16
+                                let mutable cnt = 6
+                                arr.[0] <- struct(k0, v0)
+                                arr.[1] <- struct(k1, v1)
+                                arr.[2] <- struct(k2, v2)
+                                arr.[3] <- struct(k3, v3)
+                                arr.[4] <- struct(k4, v4)
+                                arr.[5] <- t5
+                                for t in rest do
+                                    if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                    arr.[cnt] <- t
+                                    cnt <- cnt + 1
+                                    
+                                let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicatesV true cmp arr cnt
+                                MapNew.CreateTree(cmp, arr1, cnt1)
+ 
+    static member FromSeq (elements : seq<'Key * 'Value>) =
+        match elements with
+        | :? array<'Key * 'Value> as e -> MapNew.FromArray e
+        | :? list<'Key * 'Value> as e -> MapNew.FromList e
+        | _ ->
             let cmp = defaultComparer
-            let arr = elements |> List.toTupleArrayV
-            let struct(arr, cnt) = arr |> Sorting.mergeSortHandleDuplicatesV true cmp
-            MapNew.CreateTree(cmp, arr, cnt)
-            
+            use e = elements.GetEnumerator()
+            if e.MoveNext() then
+                // cnt >= 1
+                let t0 = e.Current
+                let (k0,v0) = t0
+                if e.MoveNext() then
+                    // cnt >= 2
+                    let t1 = e.Current
+                    let (k1,v1) = t1
+                    if e.MoveNext() then
+                        // cnt >= 3 
+                        let t2 = e.Current
+                        let (k2,v2) = t2
+                        if e.MoveNext() then
+                            // cnt >= 4
+                            let t3 = e.Current
+                            let (k3, v3) = t3
+                            if e.MoveNext() then
+                                // cnt >= 5
+                                let t4 = e.Current
+                                let (k4, v4) = t4
+                                if e.MoveNext() then
+                                    // cnt >= 6
+                                    let mutable arr = Array.zeroCreate 16
+                                    let mutable cnt = 6
+                                    arr.[0] <- t0
+                                    arr.[1] <- t1
+                                    arr.[2] <- t2
+                                    arr.[3] <- t3
+                                    arr.[4] <- t4
+                                    arr.[5] <- e.Current
+
+                                    while e.MoveNext() do
+                                        if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                        arr.[cnt] <- e.Current
+                                        cnt <- cnt + 1
+
+                                    let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicates true cmp arr cnt
+                                    MapNew.CreateTree(cmp, arr1, cnt1)
+
+                                else
+                                    // cnt = 5
+                                    MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+
+                            else
+                                // cnt = 4
+                                MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        else
+                            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    else
+                        // cnt = 2
+                        let c = cmp.Compare(k0, k1)
+                        if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                        elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                else
+                    // cnt = 1
+                    MapNew(cmp, MapLeaf(k0, v0))
+
+            else
+                MapNew(cmp, MapEmpty.Instance)
+
+    static member FromSeqV (elements : seq<struct('Key * 'Value)>) =
+        match elements with
+        | :? array<struct('Key * 'Value)> as e -> MapNew.FromArrayV e
+        | :? list<struct('Key * 'Value)> as e -> MapNew.FromListV e
+        | _ ->
+            let cmp = defaultComparer
+            use e = elements.GetEnumerator()
+            if e.MoveNext() then
+                // cnt >= 1
+                let struct(k0,v0) = e.Current
+                if e.MoveNext() then
+                    // cnt >= 2
+                    let struct(k1,v1) = e.Current
+                    if e.MoveNext() then
+                        // cnt >= 3 
+                        let struct(k2,v2) = e.Current
+                        if e.MoveNext() then
+                            // cnt >= 4
+                            let struct(k3, v3) = e.Current
+                            if e.MoveNext() then
+                                // cnt >= 5
+                                let struct(k4, v4) = e.Current
+                                if e.MoveNext() then
+                                    // cnt >= 6
+                                    let mutable arr = Array.zeroCreate 16
+                                    let mutable cnt = 6
+                                    arr.[0] <- struct(k0, v0)
+                                    arr.[1] <- struct(k1, v1)
+                                    arr.[2] <- struct(k2, v2)
+                                    arr.[3] <- struct(k3, v3)
+                                    arr.[4] <- struct(k4, v4)
+                                    arr.[5] <- e.Current
+
+                                    while e.MoveNext() do
+                                        if cnt >= arr.Length then System.Array.Resize(&arr, arr.Length <<< 1)
+                                        arr.[cnt] <- e.Current
+                                        cnt <- cnt + 1
+
+                                    let struct(arr1, cnt1) = Sorting.mergeSortHandleDuplicatesV true cmp arr cnt
+                                    MapNew.CreateTree(cmp, arr1, cnt1)
+
+                                else
+                                    // cnt = 5
+                                    MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4))
+
+                            else
+                                // cnt = 4
+                                MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3))
+                        else
+                            MapNew(cmp, MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2))
+                    else
+                        // cnt = 2
+                        let c = cmp.Compare(k0, k1)
+                        if c < 0 then MapNew(cmp, MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance))
+                        elif c > 0 then MapNew(cmp, MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)))
+                        else MapNew(cmp, MapLeaf(k1, v1))
+                else
+                    // cnt = 1
+                    MapNew(cmp, MapLeaf(k0, v0))
+
+            else
+                MapNew(cmp, MapEmpty.Instance)
+
             
     member x.Count = root.Count
     member x.Root = root

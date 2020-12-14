@@ -15,6 +15,7 @@ type MapBenchmark() =
 
     let mutable data : (int * int)[] = [||]
     let mutable list : list<int*int> = []
+    let mutable seq : seq<int*int> = Seq.empty
     let mutable map = Map.ofArray data
     let mutable mapNew = MapNew.ofArray data
     let mutable existing = 0
@@ -35,8 +36,10 @@ type MapBenchmark() =
 
     [<GlobalSetup>]
     member x.Setup() =
-        data <- randomArray (1 <<< 30) x.Count |> Array.map (fun i -> i,i)
+        let arr = randomArray (1 <<< 30) x.Count |> Array.map (fun i -> i,i)
+        data <- arr
         list <- Array.toList data
+        seq <- Seq.init data.Length (fun i -> arr.[i])
         map <- Map.ofArray data
         mapNew <- MapNew.ofArray data
         existing <- data.[rand.Next(data.Length)] |> fst
@@ -46,16 +49,11 @@ type MapBenchmark() =
     [<BenchmarkCategory("ofArray")>]
     member x.``Map_ofArray``() =
         Map.ofArray data
-        
-    (*[<Benchmark>]*)
-    (*member x.``MapNew_ofArray_add``() =*)
-        (*MapNew.FromArrayAddInPlace data*)
 
     [<Benchmark>]
     [<BenchmarkCategory("ofArray")>]
     member x.``MapNew_ofArray``() =
         MapNew.ofArray data
-        
         
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("ofList")>]
