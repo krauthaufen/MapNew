@@ -1,5 +1,7 @@
 ﻿open System.Collections.Generic
 open MapNew
+open BenchmarkDotNet.Configs
+open BenchmarkDotNet.Jobs
 
 let profiling() =
     
@@ -21,6 +23,9 @@ let main _argv =
     //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.SortBenchmark>()
     //|> ignore
 
-    BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>()
+    ManualConfig.Create(DefaultConfig.Instance)
+                .AddJob(Job.Default.WithGcServer(true))
+                // .AddJob(Job.Default.WithGcServer(false))
+    |> BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>
     |> ignore
     0
