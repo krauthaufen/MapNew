@@ -4,7 +4,6 @@ open BenchmarkDotNet.Configs
 open BenchmarkDotNet.Jobs
 
 let profiling() =
-    
     let rand = System.Random()
     let arr = Array.init ((1 <<< 20) - 1) (fun i -> (rand.Next 1000, i))
 
@@ -17,15 +16,18 @@ let profiling() =
 let main _argv =
     printfn "FSharp.Core: %A" typeof<list<int>>.Assembly.FullName
     
+
     //profiling()
 
 
     //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.SortBenchmark>()
     //|> ignore
 
-    ManualConfig.Create(DefaultConfig.Instance)
-                .AddJob(Job.Default.WithGcServer(true))
-                // .AddJob(Job.Default.WithGcServer(false))
+    ManualConfig
+        .Create(DefaultConfig.Instance)
+        .AddJob(Job.Default.WithGcServer(true))
+        // .AddJob(Job.Default.WithGcServer(false))
+
     |> BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>
     |> ignore
     0
