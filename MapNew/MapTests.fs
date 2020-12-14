@@ -74,9 +74,12 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
         | _ ->
             failwith "unexpected node"
 
+
     let a = getAll mn.Root
     let b = Map.toList m
     a |> should equal b
+
+    MapNew.count mn |> should equal (Map.count m)
 
 [<Tests>]
 let tests =
@@ -191,8 +194,37 @@ let tests =
             let mn = MapNew.ofSeq (Map.toSeq m)
             identical mn m
 
-            let a = (0, mn) ||> MapNew.fold (fun s k _ -> s <<< 1 + k)
-            let b = (0, m) ||> Map.fold (fun s k _ -> s <<< 1 + k)
+            let a = (0, mn) ||> MapNew.fold (fun s k _ -> s * 27 + k)
+            let b = (0, m) ||> Map.fold (fun s k _ -> s * 27 + k)
+            a |> should equal b
+        )
+        
+        testProperty "foldBack" (fun (m : Map<int, int>)  ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let a = (mn, 0) ||> MapNew.foldBack (fun _ k s -> s * 27 + k)
+            let b = (m, 0) ||> Map.foldBack (fun _ k s -> s * 27 + k)
+            a |> should equal b
+        )
+
+        
+        testProperty "exists" (fun (m : Map<int, int>)  ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let a = mn |> MapNew.exists (fun k v -> k % 3 = 2)
+            let b = m |> Map.exists (fun k v -> k % 3 = 2)
+            a |> should equal b
+        )
+        
+        
+        testProperty "forall" (fun (m : Map<int, int>)  ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let a = mn |> MapNew.forall (fun k v -> k % 3 < 2)
+            let b = m |> Map.forall (fun k v -> k % 3 < 2)
             a |> should equal b
         )
         
