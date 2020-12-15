@@ -81,6 +81,23 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
 
     MapNew.count mn |> should equal (Map.count m)
 
+module Map =
+    let union (l : Map<'K, 'V>) (r : Map<'K, 'V>) =
+        let mutable l = l
+        for KeyValue(k,v) in r do
+            l <- Map.add k v l
+        l
+
+    let unionWith (resolve : 'K -> 'V -> 'V -> 'V) (l : Map<'K, 'V>) (r : Map<'K, 'V>) =
+        let mutable l = l
+        for KeyValue(k,v) in r do   
+            l <-
+                l |> Map.change k (function
+                    | Some lv -> resolve k lv v |> Some
+                    | None -> v |> Some
+                )
+        l
+
 [<Tests>]
 let tests =
     testList "MapNew" [
@@ -173,7 +190,8 @@ let tests =
         )
 
         testProperty "add" (fun (m : Map<int, int>) (k : int) ->
-            let mn = MapNew.ofSeq (Map.toSeq m)
+            let mutable mn = MapNew.empty
+            for KeyValue(k,v) in m do mn <- MapNew.add k v mn
             identical mn m
 
             let a = mn |> MapNew.add k k
@@ -188,6 +206,14 @@ let tests =
             let a = mn |> MapNew.remove k
             let b = m |> Map.remove k
             identical a b
+        
+            let mutable a = mn
+            let mutable b = m
+            for (KeyValue(k,_)) in m do
+                a <- MapNew.remove k a
+                b <- Map.remove k b
+                identical a b
+
         )
         
         testProperty "fold" (fun (m : Map<int, int>)  ->
@@ -292,6 +318,24 @@ let tests =
             let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
             identical a b
         )
+
+        testProperty "union" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = MapNew.ofArray (Map.toArray a)
+            let nb = MapNew.ofArray (Map.toArray b)
+            
+            identical (MapNew.union na nb) (Map.union a b)
+        )
+        
+        testProperty "unionWith" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = MapNew.ofArray (Map.toArray a)
+            let nb = MapNew.ofArray (Map.toArray b)
+            
+            let resolve k l r =
+                27*k+13*l+r
+
+            identical (MapNew.unionWith resolve na nb) (Map.unionWith resolve a b)
+        )
+
 
         testProperty "tryAt" (fun (m : Map<int, int>) ->
             let mn = MapNew.ofSeq (Map.toSeq m)
