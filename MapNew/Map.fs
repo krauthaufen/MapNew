@@ -1945,9 +1945,74 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
 
     member x.Add(key : 'Key, value : 'Value) =
         MapNew(comparer, root.Add(comparer, key, value))
+       
+    member x.AddMatch(key : 'Key, value : 'Value) =
+        let rec add (cmp : IComparer<'Key>) (key : 'Key) (value : 'Value) (n : MapNode<'Key, 'Value>) =
+            match n with
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then
+                    MapInner(n, key, value, MapEmpty.Instance) :> MapNode<_,_>
+                elif c < 0 then
+                    MapInner(MapEmpty.Instance, key, value, n) :> MapNode<_,_>
+                else
+                    MapLeaf(key, value) :> MapNode<_,_>
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then
+                    MapInner.Create(
+                        n.Left,
+                        n.Key, n.Value,
+                        add cmp key value n.Right
+                    )
+                elif c < 0 then
+                    MapInner.Create(
+                        add cmp key value n.Left,
+                        n.Key, n.Value,
+                        n.Right
+                    )
+                else
+                    MapInner(
+                        n.Left,
+                        key, value,
+                        n.Right
+                    ) :> MapNode<_,_>
+            | _ ->
+                MapLeaf(key, value) :> MapNode<_,_>
+                
+        MapNew(comparer, add comparer key value root)
             
     member x.Remove(key : 'Key) =
         MapNew(comparer, root.Remove(comparer, key))
+        
+    member x.RemoveMatch(key : 'Key) =
+    
+        let rec remove (cmp : IComparer<'Key>) (key : 'Key) (n : MapNode<'Key, 'Value>) =
+            match n with
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c = 0 then MapEmpty.Instance
+                else n :> MapNode<_,_>
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then
+                    MapInner.Create(
+                        n.Left,
+                        n.Key, n.Value,
+                        remove cmp key n.Right
+                    )
+                elif c < 0 then
+                    MapInner.Create(
+                        remove cmp key n.Left,
+                        n.Key, n.Value,
+                        n.Right
+                    )
+                else
+                    MapInner.Join(n.Left, n.Right)
+            | _ ->
+                MapEmpty.Instance
+                
+        MapNew(comparer, remove comparer key root)
 
     member x.Iter(action : 'Key -> 'Value -> unit) =
         let action = OptimizedClosures.FSharpFunc<_,_,_>.Adapt action
