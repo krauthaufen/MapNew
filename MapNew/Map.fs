@@ -1288,6 +1288,99 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     static let defaultComparer = LanguagePrimitives.FastGenericComparer<'Key>
     static let empty = MapNew<'Key, 'Value>(defaultComparer, MapEmpty.Instance)
 
+    [<NonSerialized>]
+    // This type is logically immutable. This field is only mutated during deserialization.
+    let mutable comparer = comparer
+    
+    [<NonSerialized>]
+    // This type is logically immutable. This field is only mutated during deserialization.
+    let mutable root = root
+
+    // WARNING: The compiled name of this field may never be changed because it is part of the logical
+    // WARNING: permanent serialization format for this type.
+    let mutable serializedData = null
+
+    static let toKeyValueArray(root : Node<_,_>) =
+        let arr = Array.zeroCreate root.Count
+        let rec copyTo (arr : array<_>) (index : ref<int>) (n : Node<_,_>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                copyTo arr index n.Left
+                arr.[!index] <- KeyValuePair(n.Key, n.Value)
+                index := !index + 1
+                copyTo arr index n.Right
+            | :? MapLeaf<'Key, 'Value> as n ->
+                arr.[!index] <- KeyValuePair(n.Key, n.Value)
+                index := !index + 1
+            #if TWO
+            | :? MapTwo<'Key, 'Value> as n ->
+                let i = !index
+                arr.[i] <- KeyValuePair(n.K0, n.V0)
+                arr.[i+1] <- KeyValuePair(n.K1, n.V1)
+                index := i + 2
+            #endif
+            | _ ->
+                ()
+
+        let index = ref 0
+        copyTo arr index root
+        arr
+
+    static let fromArray (elements : struct('Key * 'Value)[]) =
+        let cmp = defaultComparer
+        match elements.Length with
+        | 0 -> 
+            MapEmpty.Instance
+        | 1 ->
+            let struct(k,v) = elements.[0]
+            MapLeaf(k, v) :> Node<_,_>
+        | 2 -> 
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let c = cmp.Compare(k0, k1)
+            #if TWO
+            if c < 0 then MapTwo(k0, v0, k1, v1) :> Node<_,_>
+            elif c > 0 then MapTwo(k1, v1, k0, v0) :> Node<_,_>
+            else MapLeaf(k1, v1) :> Node<_,_>
+            #else
+            if c > 0 then MapInner(MapEmpty.Instance, k1, v1, MapLeaf(k0, v0)) :> Node<_,_>
+            elif c < 0 then MapInner(MapLeaf(k0, v0), k1, v1, MapEmpty.Instance) :> Node<_,_>
+            else MapLeaf(k1, v1):> Node<_,_>
+            #endif
+        | 3 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2)
+        | 4 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            let struct(k3,v3) = elements.[3]
+            MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3)
+        | 5 ->
+            let struct(k0,v0) = elements.[0]
+            let struct(k1,v1) = elements.[1]
+            let struct(k2,v2) = elements.[2]
+            let struct(k3,v3) = elements.[3]
+            let struct(k4,v4) = elements.[4]
+            MapLeaf(k0, v0).AddInPlace(cmp, k1, v1).AddInPlace(cmp, k2, v2).AddInPlace(cmp, k3, v3).AddInPlace(cmp, k4, v4)
+        | _ ->
+            let struct(arr, cnt) = Sorting.mergeSortHandleDuplicatesV false cmp elements elements.Length
+            MapNew.CreateRoot(arr, cnt)
+
+    [<System.Runtime.Serialization.OnSerializingAttribute>]
+    member __.OnSerializing(context: System.Runtime.Serialization.StreamingContext) =
+        ignore context
+        serializedData <- toKeyValueArray root
+
+    [<System.Runtime.Serialization.OnDeserializedAttribute>]
+    member __.OnDeserialized(context: System.Runtime.Serialization.StreamingContext) =
+        ignore context
+        comparer <- defaultComparer
+        serializedData <- null
+        root <- serializedData |> Array.map (fun kvp -> struct(kvp.Key, kvp.Value)) |> fromArray 
+
     static member Empty = empty
 
     static member private CreateTree(cmp : IComparer<'Key>, arr : ('Key * 'Value)[], cnt : int)=
@@ -1337,6 +1430,30 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 ) :> Node<_,_>
 
         MapNew(cmp, create arr 0 (cnt-1))
+  
+    static member private CreateRoot(arr : struct('Key * 'Value)[], cnt : int)=
+        let rec create (arr : struct('Key * 'Value)[]) (l : int) (r : int) =
+            if l = r then
+                let struct(k,v) = arr.[l]
+                MapLeaf(k, v) :> Node<_,_>
+            #if TWO
+            elif l + 1 = r then
+                let struct(k0, v0) = arr.[l]
+                let struct(k1, v1) = arr.[r]
+                MapTwo(k0, v0, k1, v1) :> Node<_,_>
+            #endif
+            elif l > r then
+                MapEmpty.Instance
+            else
+                let m = (l+r)/2
+                let struct(k,v) = arr.[m]
+                MapInner(
+                    create arr l (m-1),
+                    k, v,
+                    create arr (m+1) r
+                ) :> Node<_,_>
+
+        create arr 0 (cnt-1)
 
     static member FromArray (elements : array<'Key * 'Value>) =
         let cmp = defaultComparer
@@ -2383,7 +2500,6 @@ module MapNew =
     let inline foldBack (folder : 'Key -> 'Value -> 'State -> 'State) (map : MapNew<'Key, 'Value>) (seed : 'State) = 
         map.FoldBack(folder, seed)
 
-
     [<CompiledName("OfSeq")>]
     let inline ofSeq (values : seq<'Key * 'Value>) = MapNew.FromSeq values
     
@@ -2401,8 +2517,6 @@ module MapNew =
     
     [<CompiledName("OfArrayValue")>]
     let inline ofArrayV (values : struct('Key * 'Value)[]) = MapNew.FromArrayV values
-
-    
 
     [<CompiledName("ToSeq")>]
     let inline toSeq (map : MapNew<'Key, 'Value>) = map |> Seq.map (fun (KeyValue(k,v)) -> k, v)
@@ -2422,7 +2536,6 @@ module MapNew =
     [<CompiledName("ToArrayValue")>]
     let inline toArrayV (map : MapNew<'Key, 'Value>) = map.ToArrayV()
 
-    
     [<CompiledName("WithMin")>]
     let inline withMin (minInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMin(minInclusive)
     
