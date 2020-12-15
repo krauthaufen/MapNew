@@ -17,7 +17,7 @@ let testProperty name action =
 
 let checkConsistency (mn : MapNew<'K, 'V>) =
     
-    let rec checkHeight (n : MapNewImplementation.Node<'K, 'V>) =
+    let rec checkHeight (n : MapNewImplementation.MapNode<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> 0
         | :? MapNewImplementation.MapLeaf<'K, 'V> -> 1
@@ -36,7 +36,7 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
         | _ ->
             failwith "unexpected node"
             
-    let rec checkCount (n : MapNewImplementation.Node<'K, 'V>) =
+    let rec checkCount (n : MapNewImplementation.MapNode<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> 0
         | :? MapNewImplementation.MapLeaf<'K, 'V> -> 1
@@ -59,7 +59,7 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
 let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
     checkConsistency mn
 
-    let rec getAll (n : MapNewImplementation.Node<'K, 'V>) =
+    let rec getAll (n : MapNewImplementation.MapNode<'K, 'V>) =
         match n with
         | :? MapNewImplementation.MapEmpty<'K, 'V> -> []
         | :? MapNewImplementation.MapLeaf<'K, 'V> as l -> [l.Key, l.Value]

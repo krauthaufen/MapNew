@@ -15,14 +15,8 @@ let profiling() =
 [<EntryPoint>]
 let main _argv =
     printfn "FSharp.Core: %A" typeof<list<int>>.Assembly.FullName
-    
-    let a = MapNew.ofArray [|0,0;1,0|]
-    let b = MapNew.ofArray [|0,0;2,0|]
-    printfn "%A" (MapNew.union a b)
-    exit 0
 
     //profiling()
-
 
     //BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.SortBenchmark>()
     //|> ignore
