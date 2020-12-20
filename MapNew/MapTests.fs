@@ -160,6 +160,7 @@ let tests =
 
 
 
+
         testProperty "enumerate" (fun (l : list<int * int>) ->
             let m = Map.ofList l
             let mn = MapNew.ofArray (Map.toArray m)
@@ -188,6 +189,22 @@ let tests =
             let mn = MapNew.ofArray (Map.toArray m)
             identical mn m
             (MapNew.toArray mn) |> should equal (Map.toArray m)
+        )
+        
+        testProperty "toArrayV" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofArray (Map.toArray m)
+            identical mn m
+            MapNew.toArrayV mn |> should equal (Map.toArray m |> Array.map (fun (a,b) -> struct(a,b)))
+        )
+        testProperty "toListV" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofArray (Map.toArray m)
+            identical mn m
+            MapNew.toListV mn |> should equal (Map.toList m |> List.map (fun (a,b) -> struct(a,b)))
+        )
+        testProperty "toSeqV" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofArray (Map.toArray m)
+            identical mn m
+            MapNew.toSeqV mn |> Seq.toList |> should equal (Map.toList m |> List.map (fun (a,b) -> struct(a,b)))
         )
 
         testProperty "containsKey" (fun (m : Map<int, int>) (k : int) ->
@@ -234,6 +251,20 @@ let tests =
                 identical a b
 
         )
+        
+        testProperty "partition" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofArray (Map.toArray m)
+            identical mn m
+
+            let ma, mb = m |> Map.partition (fun k v -> k >= v)
+            let na, nb = mn |> MapNew.partition (fun k v -> k >= v)
+
+            identical na ma
+            identical nb mb
+
+
+        )
+        
         
         testProperty "fold" (fun (m : Map<int, int>)  ->
             let mn = MapNew.ofSeq (Map.toSeq m)
