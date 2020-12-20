@@ -29,10 +29,6 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
             let h = 1 + max lh rh
             if n._Height <> h then failwithf "node has bad height: %d (should be %d)" n._Height h
             h
-        #if TWO
-        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
-            1
-        #endif
         | _ ->
             failwith "unexpected node"
             
@@ -46,10 +42,6 @@ let checkConsistency (mn : MapNew<'K, 'V>) =
             let h = 1 + lh + rh
             if n._Count <> h then failwithf "node has bad count: %d (should be %d)" n._Count h
             h
-        #if TWO
-        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
-            2
-        #endif
         | _ ->
             failwith "unexpected node"
 
@@ -67,10 +59,6 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
             let l = getAll n.Left
             let r = getAll n.Right
             l @ [n.Key, n.Value] @ r
-        #if TWO
-        | :? MapNewImplementation.MapTwo<'K, 'V> as n ->
-            [n.K0, n.V0; n.K1, n.V1]
-        #endif
         | _ ->
             failwith "unexpected node"
 
@@ -80,6 +68,8 @@ let identical (mn : MapNew<'K, 'V>) (m : Map<'K, 'V>) =
     a |> should equal b
 
     MapNew.count mn |> should equal (Map.count m)
+
+let rand = System.Random()
 
 module Map =
     let union (l : Map<'K, 'V>) (r : Map<'K, 'V>) =
@@ -97,6 +87,35 @@ module Map =
                     | None -> v |> Some
                 )
         l
+
+        
+    let ofListRandomOrder (rand : System.Random) (l : list<'K * 'V>) =
+        let l = Map.ofList l |> Map.toList
+        let rec run (rand : System.Random) (acc : Map<'K, 'V>) (l : list<'K * 'V>) =
+            match l with
+            | [] ->
+                acc
+            | (k,v) :: t ->
+                if rand.NextDouble() >= 0.5 then
+                    run rand (Map.add k v acc) t
+                else
+                    run rand acc t |> Map.add k v
+        run rand Map.empty l
+
+module MapNew =
+
+    let ofListRandomOrder (rand : System.Random) (l : list<'K * 'V>) =
+        let l = Map.ofList l |> Map.toList
+        let rec run (rand : System.Random) (acc : MapNew<'K, 'V>) (l : list<'K * 'V>) =
+            match l with
+            | [] ->
+                acc
+            | (k,v) :: t ->
+                if rand.NextDouble() >= 0.5 then
+                    run rand (MapNew.add k v acc) t
+                else
+                    run rand acc t |> MapNew.add k v
+        run rand MapNew.empty l
 
 [<Tests>]
 let tests =
@@ -358,5 +377,53 @@ let tests =
                 |> tup
                 |> should equal (Array.tryItem i arr)
         )
+
+        
+        testProperty "compare" (fun (la : list<int * int>) (lb : list<int * int>) ->
+            let na = MapNew.ofList la
+            let nb = MapNew.ofList lb
+            let a = Map.ofList la
+            let b = Map.ofList lb
+
+            compare na nb |> should equal (compare a b)
+
+            let somea = List.init 8 (fun _ -> MapNew.ofListRandomOrder rand la)
+            let someb = List.init 8 (fun _ -> MapNew.ofListRandomOrder rand lb)
+
+            for (va, vb) in List.allPairs somea someb do
+                compare va na |> should equal 0
+                compare vb nb |> should equal 0
+                compare va vb |> should equal (compare a b)
+        )
+
+        
+        testProperty "equals" (fun (la : list<int * int>) (lb : list<int * int>) ->
+            let na = MapNew.ofList la
+            let nb = MapNew.ofList lb
+            let a = Map.ofList la
+            let b = Map.ofList lb
+
+            let e = Unchecked.equals a b
+            let ne = Unchecked.equals na nb
+
+            ne |> should equal e
+            if ne then
+                let ha = Unchecked.hash na
+                let hb = Unchecked.hash nb
+                ha |> should equal hb
+
+            
+            let somea = List.init 8 (fun _ -> MapNew.ofListRandomOrder rand la)
+            let someb = List.init 8 (fun _ -> MapNew.ofListRandomOrder rand lb)
+
+            for (a, b) in List.allPairs somea somea do
+                a |> should equal b
+
+            for (a, b) in List.allPairs someb someb do
+                a |> should equal b
+
+
+        )
+
 
     ]
