@@ -618,7 +618,7 @@ open System.Diagnostics
 [<DebuggerTypeProxy("Aardvark.Base.SetDebugView`1")>]
 [<DebuggerDisplay("Count = {Count}")>]
 [<Sealed>]
-type SetNew<'T when 'T : comparison> private(comparer : IComparer<'T>, root : SetNode<'T>) =
+type SetNew<'T when 'T : comparison> internal(comparer : IComparer<'T>, root : SetNode<'T>) =
         
     static let defaultComparer = LanguagePrimitives.FastGenericComparer<'T>
     static let empty = SetNew<'T>(defaultComparer, SetEmpty.Instance)
@@ -1384,6 +1384,74 @@ type SetNew<'T when 'T : comparison> private(comparer : IComparer<'T>, root : Se
                 run <- false
         result
 
+    member x.IsProperSubsetOf (other : ICollection<'T>) =
+        other.Count > x.Count &&
+        x.Forall (fun v -> other.Contains v)
+        
+    member x.IsProperSubsetOf (other : SetNew<'T>) =
+        other.Count > x.Count &&
+        x.Forall (fun v -> other.Contains v)
+        
+    member x.IsProperSupersetOf (other : SetNew<'T>) =
+        other.Count < x.Count &&
+        other.Forall (fun v -> x.Contains v)
+        
+    member x.IsSubsetOf (other : ICollection<'T>) =
+        other.Count >= x.Count &&
+        x.Forall (fun v -> other.Contains v)
+        
+    member x.IsSubsetOf (other : SetNew<'T>) =
+        other.Count >= x.Count &&
+        x.Forall (fun v -> other.Contains v)
+        
+    member x.IsSupersetOf (other : SetNew<'T>) =
+        other.Count <= x.Count &&
+        other.Forall (fun v -> x.Contains v)
+
+    member x.SetEquals (other : ICollection<'T>) =
+        other.Count = x.Count &&
+        x.Forall (fun v -> other.Contains v)
+        
+    member x.SetEquals (other : SetNew<'T>) =
+        other.Count = x.Count &&
+        x.Forall (fun v -> other.Contains v)
+
+    member x.Overlaps (other : SetNew<'T>) =
+        if x.Count < other.Count then x.Exists (fun v -> other.Contains v)
+        else other.Exists (fun v -> x.Contains v)
+
+    member x.IsProperSubsetOf(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.IsProperSubsetOf(other)
+        | :? System.Collections.Generic.ICollection<'T> as other -> x.IsProperSubsetOf other
+        | _ -> x.IsProperSubsetOf(SetNew.FromSeq other)
+        
+    member x.IsProperSupersetOf(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.IsProperSupersetOf(other)
+        | _ -> x.IsProperSupersetOf(SetNew.FromSeq other)
+        
+    member x.IsSubsetOf(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.IsSubsetOf(other)
+        | :? System.Collections.Generic.ICollection<'T> as other -> x.IsSubsetOf other
+        | _ -> x.IsSubsetOf(SetNew.FromSeq other)
+        
+    member x.IsSupersetOf(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.IsSupersetOf(other)
+        | _ -> x.IsSupersetOf(SetNew.FromSeq other)
+        
+    member x.SetEquals(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.SetEquals(other)
+        | _ -> x.SetEquals(SetNew.FromSeq other)
+        
+    member x.Overlaps(other : seq<'T>) =
+        match other with
+        | :? SetNew<'T> as other -> x.Overlaps(other)
+        | _ -> x.Overlaps(SetNew.FromSeq other)
+
     override x.GetHashCode() =
         hash root
 
@@ -1413,6 +1481,19 @@ type SetNew<'T when 'T : comparison> private(comparer : IComparer<'T>, root : Se
         member x.Contains(kvp : 'T) = x.Contains kvp
         member x.CopyTo(array : 'T[], startIndex : int) = x.CopyTo(array, startIndex)
             
+    interface System.Collections.Generic.ISet<'T> with
+        member x.Add _ = failwith "readonly"
+        member x.UnionWith _ = failwith "readonly"
+        member x.ExceptWith _ = failwith "readonly"
+        member x.IntersectWith _ = failwith "readonly"
+        member x.SymmetricExceptWith _ = failwith "readonly"
+        member x.IsProperSubsetOf o = x.IsProperSubsetOf o
+        member x.IsProperSupersetOf o = x.IsProperSupersetOf o
+        member x.IsSubsetOf o = x.IsSubsetOf o
+        member x.IsSupersetOf o = x.IsSupersetOf o
+        member x.SetEquals o = x.SetEquals o
+        member x.Overlaps o = x.Overlaps o
+
     new(comparer : IComparer<'T>) = 
         SetNew<'T>(comparer, SetEmpty.Instance)
 
@@ -1516,42 +1597,42 @@ module SetNew =
     let inline empty<'T when 'T : comparison> = SetNew<'T>.Empty
     
     [<CompiledName("IsEmpty")>]
-    let inline isEmpty (map : SetNew<'T>) = map.Count <= 0
+    let inline isEmpty (set : SetNew<'T>) = set.Count <= 0
     
     [<CompiledName("Count")>]
-    let inline count (map : SetNew<'T>) = map.Count
+    let inline count (set : SetNew<'T>) = set.Count
     
     [<CompiledName("Add")>]
-    let inline add (value : 'T) (map : SetNew<'T>) = map.Add(value)
+    let inline add (value : 'T) (set : SetNew<'T>) = set.Add(value)
     
     [<CompiledName("Remove")>]
-    let inline remove (key : 'T) (map : SetNew<'T>) = map.Remove(key)
+    let inline remove (key : 'T) (set : SetNew<'T>) = set.Remove(key)
 
     [<CompiledName("Change")>]
-    let inline change (key : 'T) (update : bool -> bool) (map : SetNew<'T>) = map.Change(key, update)
+    let inline change (key : 'T) (update : bool -> bool) (set : SetNew<'T>) = set.Change(key, update)
     
     [<CompiledName("Contains")>]
-    let inline contains (key : 'T) (map : SetNew<'T>) = map.Contains(key)
+    let inline contains (key : 'T) (set : SetNew<'T>) = set.Contains(key)
     
     [<CompiledName("Iter")>]
-    let inline iter (action : 'T -> unit) (map : SetNew<'T>) = map.Iter(action)
+    let inline iter (action : 'T -> unit) (set : SetNew<'T>) = set.Iter(action)
     
     [<CompiledName("Filter")>]
-    let inline filter (predicate : 'T -> bool) (map : SetNew<'T>) = map.Filter(predicate)
+    let inline filter (predicate : 'T -> bool) (set : SetNew<'T>) = set.Filter(predicate)
 
     [<CompiledName("Exists")>]
-    let inline exists (predicate : 'T -> bool) (map : SetNew<'T>) = map.Exists(predicate)
+    let inline exists (predicate : 'T -> bool) (set : SetNew<'T>) = set.Exists(predicate)
     
     [<CompiledName("Forall")>]
-    let inline forall (predicate : 'T -> bool) (map : SetNew<'T>) = map.Forall(predicate)
+    let inline forall (predicate : 'T -> bool) (set : SetNew<'T>) = set.Forall(predicate)
 
     [<CompiledName("Fold")>]
-    let inline fold (folder : 'State -> 'T -> 'State) (seed : 'State) (map : SetNew<'T>) = 
-        map.Fold(folder, seed)
+    let inline fold (folder : 'State -> 'T -> 'State) (seed : 'State) (set : SetNew<'T>) = 
+        set.Fold(folder, seed)
     
     [<CompiledName("FoldBack")>]
-    let inline foldBack (folder : 'T -> 'State -> 'State) (map : SetNew<'T>) (seed : 'State) = 
-        map.FoldBack(folder, seed)
+    let inline foldBack (folder : 'T -> 'State -> 'State) (set : SetNew<'T>) (seed : 'State) = 
+        set.FoldBack(folder, seed)
 
     [<CompiledName("OfSeq")>]
     let inline ofSeq (values : seq<'T>) = SetNew.FromSeq values
@@ -1563,35 +1644,35 @@ module SetNew =
     let inline ofArray (values : 'T[]) = SetNew.FromArray values
     
     [<CompiledName("ToSeq")>]
-    let inline toSeq (map : SetNew<'T>) = map :> seq<_>
+    let inline toSeq (set : SetNew<'T>) = set :> seq<_>
 
     [<CompiledName("ToList")>]
-    let inline toList (map : SetNew<'T>) = map.ToList()
+    let inline toList (set : SetNew<'T>) = set.ToList()
     
     [<CompiledName("ToArray")>]
-    let inline toArray (map : SetNew<'T>) = map.ToArray()
+    let inline toArray (set : SetNew<'T>) = set.ToArray()
     
     [<CompiledName("WithMin")>]
-    let inline withMin (minInclusive : 'T) (map : SetNew<'T>) = map.WithMin(minInclusive)
+    let inline withMin (minInclusive : 'T) (set : SetNew<'T>) = set.WithMin(minInclusive)
     
     [<CompiledName("WithMax")>]
-    let inline withMax (maxInclusive : 'T) (map : SetNew<'T>) = map.WithMax(maxInclusive)
+    let inline withMax (maxInclusive : 'T) (set : SetNew<'T>) = set.WithMax(maxInclusive)
     
     [<CompiledName("WithRange")>]
-    let inline withRange (minInclusive : 'T) (maxInclusive : 'T) (map : SetNew<'T>) = map.GetViewBetween(minInclusive, maxInclusive)
+    let inline withRange (minInclusive : 'T) (maxInclusive : 'T) (set : SetNew<'T>) = set.GetViewBetween(minInclusive, maxInclusive)
     
     [<CompiledName("Union")>]
-    let inline union (map1 : SetNew<'T>) (map2 : SetNew<'T>) = SetNew.Union(map1, map2)
+    let inline union (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Union(set1, set2)
     
     [<CompiledName("Intersect")>]
-    let inline intersect (map1 : SetNew<'T>) (map2 : SetNew<'T>) = SetNew.Intersect(map1, map2)
+    let inline intersect (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Intersect(set1, set2)
     
     [<CompiledName("Difference")>]
-    let inline difference (map1 : SetNew<'T>) (map2 : SetNew<'T>) = SetNew.Intersect(map1, map2)
+    let inline difference (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Intersect(set1, set2)
     
     [<CompiledName("UnionMany")>]
-    let inline unionMany (maps : #seq<SetNew<'T>>) =
-        use e = (maps :> seq<_>).GetEnumerator()
+    let inline unionMany (sets : #seq<SetNew<'T>>) =
+        use e = (sets :> seq<_>).GetEnumerator()
         if e.MoveNext() then
             let mutable m = e.Current
             while e.MoveNext() do
@@ -1601,8 +1682,8 @@ module SetNew =
             empty
             
     [<CompiledName("IntersectMany")>]
-    let inline intersectMany (maps : #seq<SetNew<'T>>) =
-        use e = (maps :> seq<_>).GetEnumerator()
+    let inline intersectMany (sets : #seq<SetNew<'T>>) =
+        use e = (sets :> seq<_>).GetEnumerator()
         if e.MoveNext() then
             let mutable m = e.Current
             while e.MoveNext() do
@@ -1612,41 +1693,41 @@ module SetNew =
             empty
 
     [<CompiledName("TryMax")>]
-    let inline tryMax (map : SetNew<'T>) = map.TryMax()
+    let inline tryMax (set : SetNew<'T>) = set.TryMax()
 
     [<CompiledName("TryMin")>]
-    let inline tryMin (map : SetNew<'T>) = map.TryMin()
+    let inline tryMin (set : SetNew<'T>) = set.TryMin()
 
     [<CompiledName("TryMaxValue")>]
-    let inline tryMaxV (map : SetNew<'T>) = map.TryMaxV()
+    let inline tryMaxV (set : SetNew<'T>) = set.TryMaxV()
 
     [<CompiledName("TryMinValue")>]
-    let inline tryMinV (map : SetNew<'T>) = map.TryMinV()
+    let inline tryMinV (set : SetNew<'T>) = set.TryMinV()
     
     [<CompiledName("TryAt")>]
-    let inline tryAt (index : int) (map : SetNew<'T>) = map.TryAt index
+    let inline tryAt (index : int) (set : SetNew<'T>) = set.TryAt index
     
     [<CompiledName("TryAtValue")>]
-    let inline tryAtV (index : int) (map : SetNew<'T>) = 
-        map.TryAtV index
+    let inline tryAtV (index : int) (set : SetNew<'T>) = 
+        set.TryAtV index
 
     [<CompiledName("TryPick")>]
-    let inline tryPick (mapping : 'T -> option<'U>) (map : SetNew<'T>) =
-        map.TryPick(mapping)
+    let inline tryPick (mapping : 'T -> option<'U>) (set : SetNew<'T>) =
+        set.TryPick(mapping)
         
     [<CompiledName("TryPickValue")>]
-    let inline tryPickV (mapping : 'T -> voption<'U>) (map : SetNew<'T>) =
-        map.TryPickV(mapping)
+    let inline tryPickV (mapping : 'T -> voption<'U>) (set : SetNew<'T>) =
+        set.TryPickV(mapping)
         
     [<CompiledName("Pick")>]
-    let inline pick (mapping : 'T -> option<'U>) (map : SetNew<'T>) =
-        map.Pick(mapping)
+    let inline pick (mapping : 'T -> option<'U>) (set : SetNew<'T>) =
+        set.Pick(mapping)
 
     [<CompiledName("PickValue")>]
-    let inline pickV (mapping : 'T -> voption<'U>) (map : SetNew<'T>) =
-        map.PickV(mapping)
+    let inline pickV (mapping : 'T -> voption<'U>) (set : SetNew<'T>) =
+        set.PickV(mapping)
         
     [<CompiledName("Partition")>]
-    let inline partition (predicate : 'T -> bool) (map : SetNew<'T>) =
-        map.Partition(predicate)
+    let inline partition (predicate : 'T -> bool) (set : SetNew<'T>) =
+        set.Partition(predicate)
 

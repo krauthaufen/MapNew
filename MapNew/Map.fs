@@ -1685,6 +1685,21 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 None
         run (OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping) root
         
+    member x.Keys() =
+        let rec run (n : MapNode<'Key, 'Value>) =
+            match n with
+            | :? MapInner<'Key, 'Value> as n ->
+                SetNewImplementation.SetInner(
+                    run n.Left,
+                    n.Key,
+                    run n.Right
+                ) :> SetNewImplementation.SetNode<_>
+            | :? MapLeaf<'Key, 'Value> as n ->
+                SetNewImplementation.SetLeaf(n.Key) :> SetNewImplementation.SetNode<_>
+            | _ ->
+                SetNewImplementation.SetEmpty.Instance
+        SetNew(comparer, run root)
+
     member x.TryPickV(mapping : 'Key -> 'Value -> voption<'T>) =
         let rec run (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) (node : MapNode<'Key, 'Value>) =
             match node with
@@ -2254,6 +2269,9 @@ module MapNew =
     
     [<CompiledName("ToArrayValue")>]
     let inline toArrayV (map : MapNew<'Key, 'Value>) = map.ToArrayV()
+
+    [<CompiledName("Keys")>]
+    let inline keys (map : MapNew<'Key, 'Value>) = map.Keys()
 
     [<CompiledName("WithMin")>]
     let inline withMin (minInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMin(minInclusive)
