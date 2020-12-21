@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Compile Include="Sorting.fs" />
+    <Compile Include="Set.fs" />
     <Compile Include="Map.fs" />
     <Compile Include="MapTests.fs" />
     <Compile Include="SortBench.fs" />

@@ -268,3 +268,32 @@ module Sorting =
         // final merge-dedup run
         let cnt = mergeSeqHandleDuplicatesV cmp 0 sortedLength sortedLength src dst length
         struct(dst, cnt)
+
+
+    let sortHandleDuplicates (mutateArray : bool) (cmp : IComparer<'T>) (arr : 'T[]) (length : int) =
+        if length <= 0 then
+            struct(arr, 0)
+        else
+            let arr =
+                if mutateArray then arr
+                else arr.[0 .. length-1]
+            System.Array.Sort(arr, 0, length, cmp)
+
+            let mutable i = 1
+            let mutable oi = 1
+            let mutable last = arr.[0]
+            while i < length do
+                let v = arr.[i]
+                let c = cmp.Compare(last, v)
+                last <- v
+                i <- i + 1
+                if c = 0 then
+                    arr.[oi-1] <- v
+                else
+                    arr.[oi] <- v
+                    oi <- oi + 1
+
+            struct(arr, oi)
+            
+
+

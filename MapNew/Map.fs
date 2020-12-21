@@ -767,7 +767,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             | _ ->
                 index
 
-        copyTo arr 0 root |> ignore
+        copyTo arr 0 root |> ignore<int>
         arr
 
     static let fromArray (elements : struct('Key * 'Value)[]) =
@@ -1719,7 +1719,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         let cnt = x.Count 
         let a0 = Array.zeroCreate cnt
         let a1 = Array.zeroCreate cnt
-        x.CopyToV(a0, 0) |> ignore
+        x.CopyToV(a0, 0)
 
         let mutable i1 = 0
         let mutable i0 = 0
@@ -1789,7 +1789,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             | _ ->
                 index
 
-        copyTo arr 0 root |> ignore
+        copyTo arr 0 root |> ignore<int>
         arr
 
     member x.ToArrayV() =
@@ -1806,7 +1806,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
             | _ ->
                 index
 
-        copyTo arr 0 root |> ignore
+        copyTo arr 0 root |> ignore<int>
         arr
 
     member x.CopyTo(array : ('Key * 'Value)[], startIndex : int) =
@@ -2024,7 +2024,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                     index + 1
                 | _ ->
                     index
-            copyTo array startIndex |> ignore
+            copyTo array startIndex root |> ignore<int>
             
     interface System.Collections.Generic.IDictionary<'Key, 'Value> with
         member x.TryGetValue(key : 'Key,  value : byref<'Value>) =
