@@ -1,8 +1,8 @@
 ### Overview 
 
-![CI - Windows](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20Windows/badge.svg)
-![CI - MacOS](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20MacOS/badge.svg)
-![CI - Linux](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20Linux/badge.svg)
+[![CI - Windows](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20Windows/badge.svg)](https://github.com/krauthaufen/MapNew/actions?query=workflow%3A%22CI+-+Windows%22)
+[![CI - MacOS](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20MacOS/badge.svg)](https://github.com/krauthaufen/MapNew/actions?query=workflow%3A%22CI+-+MacOS%22)
+[![CI - Linux](https://github.com/krauthaufen/MapNew/workflows/CI%20-%20Linux/badge.svg)](https://github.com/krauthaufen/MapNew/actions?query=workflow%3A%22CI+-+Linux%22)
 
 Contains a new `Map<'Key, 'Value>` implementation drastically improving performance
 Please note that the abstract data type implemented here is the same as for the current F# `Map<'Key, 'Value>` with some internal differences:
