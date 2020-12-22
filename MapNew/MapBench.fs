@@ -126,12 +126,6 @@ type MapBenchmark() =
         for (k, v) in randomElements do
             MapNew.add k v r |> keep
         
-    [<Benchmark>]
-    [<BenchmarkCategory("add")>]
-    member x.``MapNew_addMatch``() =
-        let r = mapNew
-        for (k, v) in randomElements do
-            r.AddMatch(k, v) |> keep
 
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("remove")>]
@@ -148,14 +142,6 @@ type MapBenchmark() =
         for i in 0 .. min randomElements.Length data.Length - 1 do
             let (k,_) = data.[i]
             MapNew.remove k r |> keep
-        
-    [<Benchmark>]
-    [<BenchmarkCategory("remove")>]
-    member x.``MapNew_removeMatch``() =
-        let r = mapNew
-        for i in 0 .. min randomElements.Length data.Length - 1 do
-            let (k,_) = data.[i]
-            r.RemoveMatch(k) |> keep
 
 
     [<Benchmark(Baseline=true)>]

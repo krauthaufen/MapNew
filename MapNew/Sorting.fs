@@ -135,7 +135,7 @@ module Sorting =
         let cnt = mergeSeqHandleDuplicates cmp 0 sortedLength sortedLength src dst length
         struct(dst, cnt)
 
-    let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) (length : int) =
+    let inline private mergeSeqV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : KeyValuePair<'Key, 'Value>[]) (dst : KeyValuePair<'Key, 'Value>[]) (length : int) =
         let le = ri
         let re = min length (ri + len)
         let mutable oi = li
@@ -143,15 +143,15 @@ module Sorting =
         let mutable ri = ri
 
         while li < le && ri < re do
-            let struct(lk, lv) = src.[li]
-            let struct(rk, rv) = src.[ri]
+            let (KeyValue(lk, lv)) = src.[li]
+            let (KeyValue(rk, rv)) = src.[ri]
             let c = cmp.Compare(lk, rk)
             if c <= 0 then
-                dst.[oi] <- struct(lk, lv)
+                dst.[oi] <- KeyValuePair(lk, lv)
                 oi <- oi + 1
                 li <- li + 1
             else
-                dst.[oi] <- struct(rk, rv)
+                dst.[oi] <- KeyValuePair(rk, rv)
                 oi <- oi + 1
                 ri <- ri + 1
 
@@ -165,7 +165,7 @@ module Sorting =
             oi <- oi + 1
             ri <- ri + 1
 
-    let inline private mergeSeqHandleDuplicatesV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : struct('Key * 'Value)[]) (dst : struct('Key * 'Value)[]) (length : int) =
+    let inline private mergeSeqHandleDuplicatesV (cmp : IComparer<'Key>) (li : int) (ri : int) (len : int) (src : KeyValuePair<'Key, 'Value>[]) (dst : KeyValuePair<'Key, 'Value>[]) (length : int) =
         let le = ri
         let re = min length (ri + len)
         let start = li
@@ -176,16 +176,16 @@ module Sorting =
 
         let inline append k v =
             if oi > start && cmp.Compare(k, lastKey) = 0 then
-                dst.[oi-1] <- struct(k,v)
+                dst.[oi-1] <- KeyValuePair(k,v)
                 lastKey <- k
             else
-                dst.[oi] <- struct(k,v)
+                dst.[oi] <- KeyValuePair(k,v)
                 lastKey <- k
                 oi <- oi + 1
 
         while li < le && ri < re do
-            let struct(lk, lv) = src.[li]
-            let struct(rk, rv) = src.[ri]
+            let (KeyValue(lk, lv)) = src.[li]
+            let (KeyValue(rk, rv)) = src.[ri]
             let c = cmp.Compare(lk, rk)
             if c <= 0 then
                 append lk lv
@@ -195,19 +195,19 @@ module Sorting =
                 ri <- ri + 1
 
         while li < le do
-            let struct(k,v) = src.[li]
+            let (KeyValue(k,v)) = src.[li]
             append k v
             li <- li + 1
                 
         while ri < re do
-            let struct(k,v) = src.[ri]
+            let (KeyValue(k,v)) = src.[ri]
             append k v
             ri <- ri + 1
 
         oi
         
     // assumes length > 2
-    let mergeSortHandleDuplicatesV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : struct('Key * 'Value)[]) (length : int) =
+    let mergeSortHandleDuplicatesV (mutateArray : bool) (cmp : IComparer<'Key>) (arr : KeyValuePair<'Key, 'Value>[]) (length : int) =
         let mutable src = Array.zeroCreate length
         let mutable dst = 
             // mutateArray => allowed to mutate arr
@@ -218,16 +218,16 @@ module Sorting =
         let mutable i0 = 0
         let mutable i1 = 1
         while i1 < length do
-            let struct(ka,va) = arr.[i0] 
-            let struct(kb,vb) = arr.[i1]
+            let (KeyValue(ka,va)) = arr.[i0] 
+            let (KeyValue(kb,vb)) = arr.[i1]
 
             let c = cmp.Compare(ka, kb)
             if c <= 0 then
-                src.[i0] <- struct(ka, va)
-                src.[i1] <- struct(kb, vb)
+                src.[i0] <- KeyValuePair(ka, va)
+                src.[i1] <- KeyValuePair(kb, vb)
             else
-                src.[i0] <- struct(kb, vb)
-                src.[i1] <- struct(ka, va)
+                src.[i0] <- KeyValuePair(kb, vb)
+                src.[i1] <- KeyValuePair(ka, va)
                     
             i0 <- i0 + 2
             i1 <- i1 + 2
