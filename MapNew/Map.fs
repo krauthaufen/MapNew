@@ -1,12 +1,19 @@
 ﻿namespace MapNew
 
+
 open System
-open System.Linq
+open System.Collections
 open System.Collections.Generic
+open System.Diagnostics
+open System.Text
+open Microsoft.FSharp.Core
+open Microsoft.FSharp.Core.LanguagePrimitives
+open Microsoft.FSharp.Core.LanguagePrimitives.IntrinsicOperators
+open Microsoft.FSharp.Core.Operators
+open Microsoft.FSharp.Collections
+
 
 module MapNewImplementation = 
-
-    
 
     [<AbstractClass>]
     type MapNode<'Key, 'Value>() =
@@ -35,12 +42,6 @@ module MapNewImplementation =
         
         abstract member Change : comparer : IComparer<'Key> * key : 'Key * (option<'Value> -> option<'Value>) -> MapNode<'Key, 'Value>
         abstract member ChangeV : comparer : IComparer<'Key> * key : 'Key * (voption<'Value> -> voption<'Value>) -> MapNode<'Key, 'Value>
-        
-        //// find, findKey tryFindKey, pick, partition, tryPick
-        //abstract member TryFindKey : pick : OptimizedClosures.FSharpFunc<'Key, 'Value, bool> -> option<'Key>
-        //abstract member TryFindKeyV : pick : OptimizedClosures.FSharpFunc<'Key, 'Value, bool> -> voption<'Key>
-        //abstract member TryPick : pick : OptimizedClosures.FSharpFunc<'Key, 'Value, option<'T>> -> option<'T>
-        //abstract member TryPickV : pick : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>> -> voption<'T>
 
 
     and [<Sealed>]
@@ -94,7 +95,7 @@ module MapNewImplementation =
             | None -> x :> MapNode<_,_>
             | Some v -> MapLeaf(key, v) :> MapNode<_,_>
             
-        override x.ChangeV(comparer, key, update) =
+        override x.ChangeV(_comparer, key, update) =
             match update ValueNone with
             | ValueNone -> x :> MapNode<_,_>
             | ValueSome v -> MapLeaf(key, v) :> MapNode<_,_>
@@ -731,11 +732,13 @@ module MapNewImplementation =
 
 open MapNewImplementation
 open System.Diagnostics
+open System.Runtime.InteropServices
 
-[<DebuggerTypeProxy("Aardvark.Base.MapDebugView`2")>]
+[<DebuggerTypeProxy("MapNew.MapNewDebugView`2")>]
 [<DebuggerDisplay("Count = {Count}")>]
+[<CompiledName("FSharpMapNew`2")>]
 [<Sealed>]
-type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'Key>, root : MapNode<'Key, 'Value>) =
+type MapNew< [<EqualityConditionalOn>] 'Key, [<EqualityConditionalOn;ComparisonConditionalOn>] 'Value when 'Key : comparison> private(comparer : IComparer<'Key>, root : MapNode<'Key, 'Value>) =
         
     static let defaultComparer = LanguagePrimitives.FastGenericComparer<'Key>
     static let empty = MapNew<'Key, 'Value>(defaultComparer, MapEmpty.Instance)
@@ -1230,7 +1233,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 | :? MapInner<'Key, 'Value> as r ->
                     if l.Count > r.Count then
                         let struct(rl, rr, rv) = r.SplitV(cmp, l.Key)
-                        let r = ()
                         match rv with
                         | ValueSome rv ->
                             MapInner.Create(
@@ -1246,7 +1248,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                             )
                     else
                         let struct(ll, lr, _lv) = l.SplitV(cmp, r.Key)
-                        let l = ()
                         MapInner.Create(
                             union cmp ll r.Left, 
                             r.Key, r.Value, 
@@ -1284,7 +1285,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 | :? MapInner<'Key, 'Value> as r ->
                     if l.Count > r.Count then
                         let struct(rl, rr, rv) = r.SplitV(cmp, l.Key)
-                        let r = ()
                         match rv with
                         | ValueSome rv ->
                             MapInner.Create(
@@ -1300,7 +1300,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                             )
                     else
                         let struct(ll, lr, lv) = l.SplitV(cmp, r.Key)
-                        let l = ()
                         match lv with
                         | ValueSome lv ->
                             MapInner.Create(
@@ -1324,7 +1323,9 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         MapNew(cmp, union cmp resolve l.Root r.Root)
         
     member x.Count = root.Count
+    member x.IsEmpty = root.Count = 0
     member x.Root = root
+    member x.Comparer = comparer
 
     static member ComputeDelta<'T>(l : MapNew<'Key, 'Value>, r : MapNew<'Key, 'Value>, add : MapNew<'Key, 'Value> -> MapNew<'Key, 'T>, remove : MapNew<'Key, 'Value> -> MapNew<'Key, 'T>, update : 'Key -> 'Value -> 'Value -> voption<'T>) : MapNew<'Key, 'T> =
         
@@ -1383,7 +1384,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 | :? MapInner<'Key, 'Value> as r ->
                     if l.Count > r.Count then
                         let struct(rl, rr, rv) = r.SplitV(cmp, l.Key)
-                        let r = ()
                         let a = computeDelta cmp update l.Left rl
                         let splitter = 
                             match rv with
@@ -1395,7 +1395,6 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                         | ValueNone -> MapInner.Join(a, b)
                     else
                         let struct(ll, lr, lv) = l.SplitV(cmp, r.Key)
-                        let l = ()
                         let a = computeDelta cmp update ll r.Left
                         let splitter = 
                             match lv with
@@ -1593,24 +1592,25 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 None
         tryFind comparer key root
         
-    member x.Find(key : 'Key) =
-        let rec find (cmp : IComparer<_>) key (n : MapNode<_,_>) =
+    member x.Find(key : 'Key) : 'Value =
+        let rec run (cmp : IComparer<_>) key (n : MapNode<_,_>) =
             match n with
             | :? MapInner<'Key, 'Value> as n ->
                 let c = cmp.Compare(key, n.Key)
-                if c > 0 then find cmp key n.Right
-                elif c < 0 then find cmp key n.Left
+                if c > 0 then run cmp key n.Right
+                elif c < 0 then run cmp key n.Left
                 else n.Value
             | :? MapLeaf<'Key, 'Value> as n ->
                 let c = cmp.Compare(key, n.Key)
                 if c = 0 then n.Value
-                else raise <| KeyNotFoundException(string key)
+                else raise <| KeyNotFoundException()
             | _ ->
-                raise <| KeyNotFoundException(string key)
-        find comparer key root
+                raise <| KeyNotFoundException()
+        run comparer key root 
+        
 
     member x.Item
-        with get(key : 'Key) = x.Find key
+        with get(key : 'Key) : 'Value = x.Find key
 
     member x.TryFindV(key : 'Key) =
         let rec tryFind (cmp : IComparer<_>) key (n : MapNode<_,_>) =
@@ -1685,20 +1685,20 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 None
         run (OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping) root
         
-    member x.Keys() =
-        let rec run (n : MapNode<'Key, 'Value>) =
-            match n with
-            | :? MapInner<'Key, 'Value> as n ->
-                SetNewImplementation.SetInner(
-                    run n.Left,
-                    n.Key,
-                    run n.Right
-                ) :> SetNewImplementation.SetNode<_>
-            | :? MapLeaf<'Key, 'Value> as n ->
-                SetNewImplementation.SetLeaf(n.Key) :> SetNewImplementation.SetNode<_>
-            | _ ->
-                SetNewImplementation.SetEmpty.Instance
-        SetNew(comparer, run root)
+    //member x.Keys() =
+    //    let rec run (n : MapNode<'Key, 'Value>) =
+    //        match n with
+    //        | :? MapInner<'Key, 'Value> as n ->
+    //            SetNewImplementation.SetInner(
+    //                run n.Left,
+    //                n.Key,
+    //                run n.Right
+    //            ) :> SetNewImplementation.SetNode<_>
+    //        | :? MapLeaf<'Key, 'Value> as n ->
+    //            SetNewImplementation.SetLeaf(n.Key) :> SetNewImplementation.SetNode<_>
+    //        | _ ->
+    //            SetNewImplementation.SetEmpty.Instance
+    //    SetNew(comparer, run root)
 
     member x.TryPickV(mapping : 'Key -> 'Value -> voption<'T>) =
         let rec run (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) (node : MapNode<'Key, 'Value>) =
@@ -1825,7 +1825,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         arr
 
     member x.CopyTo(array : ('Key * 'Value)[], startIndex : int) =
-        if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("Map.CopyTo")
+        if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("MapNew.CopyTo")
         let rec copyTo (arr : array<_>) (index : int) (n : MapNode<_,_>) =
             match n with
             | :? MapInner<'Key, 'Value> as n ->
@@ -1840,7 +1840,7 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         copyTo array startIndex root |> ignore<int>
 
     member x.CopyToV(array : struct('Key * 'Value)[], startIndex : int) =
-        if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("Map.CopyTo")
+        if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("MapNew.CopyTo")
         let rec copyTo (arr : array<_>) (index : int) (n : MapNode<_,_>) =
             match n with
             | :? MapInner<'Key, 'Value> as n ->
@@ -1928,8 +1928,8 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                 ValueNone
         run root
 
-    member x.Change(key : 'Key, update : option<'Value> -> option<'Value>) =
-        MapNew(comparer, root.Change(comparer, key, update))
+    member x.Change(key : 'Key, f : option<'Value> -> option<'Value>) =
+        MapNew(comparer, root.Change(comparer, key, f))
         
     member x.ChangeV(key : 'Key, update : voption<'Value> -> voption<'Value>) =
         MapNew(comparer, root.ChangeV(comparer, key, update))
@@ -2004,11 +2004,44 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
         | :? MapNew<'Key, 'Value> as o -> equals comparer root o.Root
         | _ -> false
 
+    override x.ToString() =
+        match List.ofSeq (Seq.truncate 4 x) with 
+        | [] -> "map []"
+        | [KeyValue h1] ->
+            let txt1 = string h1
+            StringBuilder().Append("map [").Append(txt1).Append("]").ToString()
+        | [KeyValue h1; KeyValue h2] ->
+            let txt1 = string h1
+            let txt2 = string h2
+            StringBuilder().Append("map [").Append(txt1).Append("; ").Append(txt2).Append("]").ToString()
+        | [KeyValue h1; KeyValue h2; KeyValue h3] ->
+            let txt1 = string h1
+            let txt2 = string h2
+            let txt3 = string h3
+            StringBuilder().Append("map [").Append(txt1).Append("; ").Append(txt2).Append("; ").Append(txt3).Append("]").ToString()
+        | KeyValue h1 :: KeyValue h2 :: KeyValue h3 :: _ ->
+            let txt1 = string h1
+            let txt2 = string h2
+            let txt3 = string h3
+            StringBuilder().Append("map [").Append(txt1).Append("; ").Append(txt2).Append("; ").Append(txt3).Append("; ... ]").ToString() 
+
+
+    member x.TryGetValue(key : 'Key, [<Out>] value : byref<'Value>) =
+        match x.TryFindV key with
+        | ValueSome v ->
+            value <- v
+            true
+        | ValueNone ->
+            false
+
     interface System.IComparable with
-        member x.CompareTo o = x.CompareTo (o :?> MapNew<_,_>)
-            
-    interface System.IComparable<MapNew<'Key, 'Value>> with
-        member x.CompareTo o = x.CompareTo o
+        member x.CompareTo o = 
+            match o with
+            | :? MapNew<'Key, 'Value> as o -> x.CompareTo o
+            | _ -> raise <| ArgumentException()
+
+    //interface System.IComparable<MapNew<'Key, 'Value>> with
+    //    member x.CompareTo o = x.CompareTo o
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = new MapNewEnumerator<_,_>(root) :> _
@@ -2019,15 +2052,15 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
     interface System.Collections.Generic.ICollection<KeyValuePair<'Key, 'Value>> with
         member x.Count = x.Count
         member x.IsReadOnly = true
-        member x.Clear() = failwith "readonly"
-        member x.Add(_) = failwith "readonly"
-        member x.Remove(_) = failwith "readonly"
+        member x.Clear() = raise <| NotSupportedException()
+        member x.Add(_) = raise <| NotSupportedException()
+        member x.Remove(_) = raise <| NotSupportedException()
         member x.Contains(kvp : KeyValuePair<'Key, 'Value>) =
             match x.TryFindV kvp.Key with
             | ValueSome v -> Unchecked.equals v kvp.Value
             | ValueNone -> false
         member x.CopyTo(array : KeyValuePair<'Key, 'Value>[], startIndex : int) =
-            if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("Map.CopyTo")
+            if startIndex < 0 || startIndex + x.Count > array.Length then raise <| System.IndexOutOfRangeException("MapNew.CopyTo")
             let rec copyTo (arr : array<_>) (index : int) (n : MapNode<_,_>) =
                 match n with
                 | :? MapInner<'Key, 'Value> as n ->
@@ -2041,54 +2074,93 @@ type MapNew<'Key, 'Value when 'Key : comparison> private(comparer : IComparer<'K
                     index
             copyTo array startIndex root |> ignore<int>
             
+    interface System.Collections.Generic.IReadOnlyCollection<KeyValuePair<'Key, 'Value>> with
+        member x.Count = x.Count
+
+    interface System.Collections.Generic.IReadOnlyDictionary<'Key, 'Value> with
+        member x.Item   
+            with get(k : 'Key) = x.[k]
+
+        member x.ContainsKey k = x.ContainsKey k
+        member x.Keys = x |> Seq.map (fun (KeyValue(k,_v)) -> k)
+        member x.Values = x |> Seq.map (fun (KeyValue(_k,v)) -> v)
+        member x.TryGetValue(key : 'Key, [<Out>] value : byref<'Value>) = x.TryGetValue(key, &value)
+
     interface System.Collections.Generic.IDictionary<'Key, 'Value> with
-        member x.TryGetValue(key : 'Key,  value : byref<'Value>) =
-            match x.TryFindV key with
-            | ValueSome v ->
-                value <- v
-                true
-            | ValueNone ->
-                false
+        member x.TryGetValue(key : 'Key,  [<Out>] value : byref<'Value>) = x.TryGetValue(key, &value)
 
-        member x.Add(_,_) =
-            failwith "readonly"
-
-        member x.Remove(_) =
-            failwith "readonly"
+        member x.Add(_,_) = raise <| NotSupportedException()
+        member x.Remove(_) = raise <| NotSupportedException()
 
         member x.Keys =
-            failwith "implement me"
+            let rec copyTo (arr : array<_>) (index : int) (n : MapNode<_,_>) =
+                match n with
+                | :? MapInner<'Key, 'Value> as n ->
+                    let i = copyTo arr index n.Left
+                    arr.[i] <- n.Key
+                    copyTo arr (i+1) n.Right
+                | :? MapLeaf<'Key, 'Value> as n ->
+                    arr.[index] <- n.Key
+                    index + 1
+                | _ ->
+                    index
+            let arr = Array.zeroCreate x.Count
+            copyTo arr 0 root |> ignore<int>
+            arr :> _
             
         member x.Values =
-            failwith "implement me"
+            let rec copyTo (arr : array<_>) (index : int) (n : MapNode<_,_>) =
+                match n with
+                | :? MapInner<'Key, 'Value> as n ->
+                    let i = copyTo arr index n.Left
+                    arr.[i] <- n.Value
+                    copyTo arr (i+1) n.Right
+                | :? MapLeaf<'Key, 'Value> as n ->
+                    arr.[index] <- n.Value
+                    index + 1
+                | _ ->
+                    index
+            let arr = Array.zeroCreate x.Count
+            copyTo arr 0 root |> ignore<int>
+            arr :> _
 
         member x.ContainsKey key =
             x.ContainsKey key
 
         member x.Item
-            with get (key : 'Key) = x.TryFindV key |> ValueOption.get
-            and set _ _ = failwith "readonly"
+            with get (key : 'Key) = x.Find key
+            and set _ _ = raise <| NotSupportedException()
 
     new(comparer : IComparer<'Key>) = 
         MapNew<'Key, 'Value>(comparer, MapEmpty.Instance)
 
-and MapNewEnumerator<'Key, 'Value> =
+    new(elements : seq<'Key * 'Value>) =
+        let m = MapNew.FromSeq elements
+        MapNew<'Key, 'Value>(m.Comparer, m.Root)
+
+and [<NoComparison; NoEquality>] 
+    MapNewEnumerator<'Key, 'Value> =
     struct
         val mutable public Root : MapNode<'Key, 'Value>
         val mutable public Stack : list<struct(MapNode<'Key, 'Value> * bool)>
         val mutable public Value : KeyValuePair<'Key, 'Value>
+        val mutable public Valid : bool
 
-        member x.Current : KeyValuePair<'Key, 'Value> = x.Value
+        member x.Current : KeyValuePair<'Key, 'Value> = 
+            if x.Valid then x.Value
+            else raise <| InvalidOperationException()
 
         member x.Reset() =
             if x.Root.Height > 0 then
                 x.Stack <- [struct(x.Root, true)]
                 x.Value <- Unchecked.defaultof<_>
+            x.Valid <- false
 
         member x.Dispose() =
             x.Root <- MapEmpty.Instance
             x.Stack <- []
             x.Value <- Unchecked.defaultof<_>
+            x.Valid <- false
                 
         member inline private x.MoveNext(deep : bool, top : MapNode<'Key, 'Value>) =
             let mutable top = top
@@ -2123,8 +2195,10 @@ and MapNewEnumerator<'Key, 'Value> =
             | struct(n, deep) :: rest ->
                 x.Stack <- rest
                 x.MoveNext(deep, n)
+                x.Valid <- true
                 true
             | [] ->
+                x.Valid <- false
                 false
                             
             
@@ -2141,13 +2215,15 @@ and MapNewEnumerator<'Key, 'Value> =
 
         new(r : MapNode<'Key, 'Value>) =
             if r.Height = 0 then
-                { 
+                {
+                    Valid = false
                     Root = r
                     Stack = []
                     Value = Unchecked.defaultof<_>
                 }
             else       
                 { 
+                    Valid = false
                     Root = r
                     Stack = [struct(r, true)]
                     Value = Unchecked.defaultof<_>
@@ -2155,7 +2231,7 @@ and MapNewEnumerator<'Key, 'Value> =
 
     end
 
-and internal MapDebugView<'Key, 'Value when 'Key : comparison> =
+and internal MapNewDebugView<'Key, 'Value when 'Key : comparison> =
 
     [<DebuggerBrowsable(DebuggerBrowsableState.RootHidden)>]
     val mutable public Entries : KeyValuePairDebugFriendly<'Key, 'Value>[]
@@ -2176,117 +2252,117 @@ and
 module MapNew =
 
     [<GeneralizableValue; CompiledName("Empty")>]
-    let inline empty<'Key, 'Value when 'Key : comparison> = MapNew<'Key, 'Value>.Empty
+    let empty<'Key, 'Value when 'Key : comparison> = MapNew<'Key, 'Value>.Empty
     
     [<CompiledName("IsEmpty")>]
-    let inline isEmpty (map : MapNew<'Key, 'Value>) = map.Count <= 0
+    let isEmpty (table : MapNew<'Key, 'Value>) = table.Count <= 0
     
     [<CompiledName("Count")>]
-    let inline count (map : MapNew<'Key, 'Value>) = map.Count
+    let count (table : MapNew<'Key, 'Value>) = table.Count
     
     [<CompiledName("Add")>]
-    let inline add (key : 'Key) (value : 'Value) (map : MapNew<'Key, 'Value>) = map.Add(key, value)
+    let add (key : 'Key) (value : 'Value) (table : MapNew<'Key, 'Value>) = table.Add(key, value)
     
     [<CompiledName("Remove")>]
-    let inline remove (key : 'Key) (map : MapNew<'Key, 'Value>) = map.Remove(key)
+    let remove (key : 'Key) (table : MapNew<'Key, 'Value>) = table.Remove(key)
 
     [<CompiledName("Change")>]
-    let inline change (key : 'Key) (update : option<'Value> -> option<'Value>) (map : MapNew<'Key, 'Value>) = map.Change(key, update)
+    let change (key : 'Key) (f : option<'Value> -> option<'Value>) (table : MapNew<'Key, 'Value>) = table.Change(key, f)
     
     [<CompiledName("ChangeValue")>]
-    let inline changeV (key : 'Key) (update : voption<'Value> -> voption<'Value>) (map : MapNew<'Key, 'Value>) = map.ChangeV(key, update)
+    let changeV (key : 'Key) (update : voption<'Value> -> voption<'Value>) (map : MapNew<'Key, 'Value>) = map.ChangeV(key, update)
 
     [<CompiledName("TryFind")>]
-    let inline tryFind (key : 'Key) (map : MapNew<'Key, 'Value>) = map.TryFind(key)
+    let tryFind (key : 'Key) (table : MapNew<'Key, 'Value>) = table.TryFind(key)
     
     [<CompiledName("TryFindValue")>]
-    let inline tryFindV (key : 'Key) (map : MapNew<'Key, 'Value>) = map.TryFindV(key)
+    let tryFindV (key : 'Key) (map : MapNew<'Key, 'Value>) = map.TryFindV(key)
     
     [<CompiledName("ContainsKey")>]
-    let inline containsKey (key : 'Key) (map : MapNew<'Key, 'Value>) = map.ContainsKey(key)
+    let containsKey (key : 'Key) (table : MapNew<'Key, 'Value>) = table.ContainsKey(key)
     
-    [<CompiledName("Iter")>]
-    let inline iter (action : 'Key -> 'Value -> unit) (map : MapNew<'Key, 'Value>) = map.Iter(action)
+    [<CompiledName("Iterate")>]
+    let iter (action : 'Key -> 'Value -> unit) (table : MapNew<'Key, 'Value>) = table.Iter(action)
     
-    [<CompiledName("Map")>]
-    let inline map (mapping : 'Key -> 'Value -> 'T) (map : MapNew<'Key, 'Value>) = map.Map(mapping)
+    [<CompiledName("MapNew")>]
+    let map (mapping : 'Key -> 'Value -> 'T) (table : MapNew<'Key, 'Value>) = table.Map(mapping)
     
     [<CompiledName("Choose")>]
-    let inline choose (mapping : 'Key -> 'Value -> option<'T>) (map : MapNew<'Key, 'Value>) = map.Choose(mapping)
+    let choose (mapping : 'Key -> 'Value -> option<'T>) (map : MapNew<'Key, 'Value>) = map.Choose(mapping)
     
     [<CompiledName("ChooseValue")>]
-    let inline chooseV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) = map.ChooseV(mapping)
+    let chooseV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) = map.ChooseV(mapping)
 
     [<CompiledName("Filter")>]
-    let inline filter (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) = map.Filter(predicate)
+    let filter (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) = table.Filter(predicate)
 
     [<CompiledName("Exists")>]
-    let inline exists (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) = map.Exists(predicate)
+    let exists (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) = table.Exists(predicate)
     
-    [<CompiledName("Forall")>]
-    let inline forall (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) = map.Forall(predicate)
+    [<CompiledName("ForAll")>]
+    let forall (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) = table.Forall(predicate)
 
     [<CompiledName("Fold")>]
-    let inline fold (folder : 'State -> 'Key -> 'Value -> 'State) (seed : 'State) (map : MapNew<'Key, 'Value>) = 
-        map.Fold(folder, seed)
+    let fold<'Key,'Value,'State when 'Key : comparison> (folder : 'State -> 'Key -> 'Value -> 'State) (state : 'State) (table : MapNew<'Key, 'Value>) = 
+        table.Fold(folder, state)
     
     [<CompiledName("FoldBack")>]
-    let inline foldBack (folder : 'Key -> 'Value -> 'State -> 'State) (map : MapNew<'Key, 'Value>) (seed : 'State) = 
-        map.FoldBack(folder, seed)
+    let foldBack (folder : 'Key -> 'Value -> 'State -> 'State) (table : MapNew<'Key, 'Value>) (state : 'State) = 
+        table.FoldBack(folder, state)
 
     [<CompiledName("OfSeq")>]
-    let inline ofSeq (values : seq<'Key * 'Value>) = MapNew.FromSeq values
+    let ofSeq (elements : seq<'Key * 'Value>) = MapNew.FromSeq elements
     
     [<CompiledName("OfList")>]
-    let inline ofList (values : list<'Key * 'Value>) = MapNew.FromList values
+    let ofList (elements : list<'Key * 'Value>) = MapNew.FromList elements
     
     [<CompiledName("OfArray")>]
-    let inline ofArray (values : ('Key * 'Value)[]) = MapNew.FromArray values
+    let ofArray (elements : ('Key * 'Value)[]) = MapNew.FromArray elements
     
     [<CompiledName("OfSeqValue")>]
-    let inline ofSeqV (values : seq<struct('Key * 'Value)>) = MapNew.FromSeqV values
+    let ofSeqV (values : seq<struct('Key * 'Value)>) = MapNew.FromSeqV values
     
     [<CompiledName("OfListValue")>]
-    let inline ofListV (values : list<struct('Key * 'Value)>) = MapNew.FromListV values
+    let ofListV (values : list<struct('Key * 'Value)>) = MapNew.FromListV values
     
     [<CompiledName("OfArrayValue")>]
-    let inline ofArrayV (values : struct('Key * 'Value)[]) = MapNew.FromArrayV values
+    let ofArrayV (values : struct('Key * 'Value)[]) = MapNew.FromArrayV values
 
     [<CompiledName("ToSeq")>]
-    let inline toSeq (map : MapNew<'Key, 'Value>) = map |> Seq.map (fun (KeyValue(k,v)) -> k, v)
+    let toSeq (table : MapNew<'Key, 'Value>) = table |> Seq.map (fun (KeyValue(k,v)) -> k, v)
 
     [<CompiledName("ToSeqValue")>]
-    let inline toSeqV (map : MapNew<'Key, 'Value>) = map |> Seq.map (fun (KeyValue(k,v)) -> struct (k, v))
+    let toSeqV (map : MapNew<'Key, 'Value>) = map |> Seq.map (fun (KeyValue(k,v)) -> struct (k, v))
 
     [<CompiledName("ToList")>]
-    let inline toList (map : MapNew<'Key, 'Value>) = map.ToList()
+    let toList (table : MapNew<'Key, 'Value>) = table.ToList()
     
     [<CompiledName("ToListValue")>]
-    let inline toListV (map : MapNew<'Key, 'Value>) = map.ToListV()
+    let toListV (map : MapNew<'Key, 'Value>) = map.ToListV()
     
     [<CompiledName("ToArray")>]
-    let inline toArray (map : MapNew<'Key, 'Value>) = map.ToArray()
+    let toArray (table : MapNew<'Key, 'Value>) = table.ToArray()
     
     [<CompiledName("ToArrayValue")>]
-    let inline toArrayV (map : MapNew<'Key, 'Value>) = map.ToArrayV()
+    let toArrayV (map : MapNew<'Key, 'Value>) = map.ToArrayV()
 
-    [<CompiledName("Keys")>]
-    let inline keys (map : MapNew<'Key, 'Value>) = map.Keys()
+    //[<CompiledName("Keys")>]
+    //let keys (map : MapNew<'Key, 'Value>) = map.Keys()
 
     [<CompiledName("WithMin")>]
-    let inline withMin (minInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMin(minInclusive)
+    let withMin (minInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMin(minInclusive)
     
     [<CompiledName("WithMax")>]
-    let inline withMax (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMax(maxInclusive)
+    let withMax (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.WithMax(maxInclusive)
     
     [<CompiledName("WithRange")>]
-    let inline withRange (minInclusive : 'Key) (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.GetViewBetween(minInclusive, maxInclusive)
+    let withRange (minInclusive : 'Key) (maxInclusive : 'Key) (map : MapNew<'Key, 'Value>) = map.GetViewBetween(minInclusive, maxInclusive)
     
     [<CompiledName("Union")>]
-    let inline union (map1 : MapNew<'Key, 'Value>) (map2 : MapNew<'Key, 'Value>) = MapNew.Union(map1, map2)
+    let union (map1 : MapNew<'Key, 'Value>) (map2 : MapNew<'Key, 'Value>) = MapNew.Union(map1, map2)
     
     [<CompiledName("UnionMany")>]
-    let inline unionMany (maps : #seq<MapNew<'Key, 'Value>>) =
+    let unionMany (maps : #seq<MapNew<'Key, 'Value>>) =
         use e = (maps :> seq<_>).GetEnumerator()
         if e.MoveNext() then
             let mutable m = e.Current
@@ -2297,60 +2373,60 @@ module MapNew =
             empty
     
     [<CompiledName("UnionWith")>]
-    let inline unionWith (resolve : 'Key -> 'Value -> 'Value -> 'Value) (map1 : MapNew<'Key, 'Value>) (map2 : MapNew<'Key, 'Value>) = MapNew.UnionWith(map1, map2, resolve)
+    let unionWith (resolve : 'Key -> 'Value -> 'Value -> 'Value) (map1 : MapNew<'Key, 'Value>) (map2 : MapNew<'Key, 'Value>) = MapNew.UnionWith(map1, map2, resolve)
     
     [<CompiledName("TryMax")>]
-    let inline tryMax (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValue()
+    let tryMax (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValue()
 
     [<CompiledName("TryMin")>]
-    let inline tryMin (map : MapNew<'Key, 'Value>) = map.TryMinKeyValue()
+    let tryMin (map : MapNew<'Key, 'Value>) = map.TryMinKeyValue()
 
     [<CompiledName("TryMaxValue")>]
-    let inline tryMaxV (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValueV()
+    let tryMaxV (map : MapNew<'Key, 'Value>) = map.TryMaxKeyValueV()
 
     [<CompiledName("TryMinValue")>]
-    let inline tryMinV (map : MapNew<'Key, 'Value>) = map.TryMinKeyValueV()
+    let tryMinV (map : MapNew<'Key, 'Value>) = map.TryMinKeyValueV()
     
     [<CompiledName("TryAt")>]
-    let inline tryAt (index : int) (map : MapNew<'Key, 'Value>) = map.TryAt index
+    let tryAt (index : int) (map : MapNew<'Key, 'Value>) = map.TryAt index
     
     [<CompiledName("TryAtValue")>]
-    let inline tryAtV (index : int) (map : MapNew<'Key, 'Value>) = 
+    let tryAtV (index : int) (map : MapNew<'Key, 'Value>) = 
         map.TryAtV index
         
     [<CompiledName("Find")>]
-    let inline find (key : 'Key) (map : MapNew<'Key, 'Value>) =
-        map.Find key
+    let find (key : 'Key) (table : MapNew<'Key, 'Value>) =
+        table.Find key
         
     [<CompiledName("FindKey")>]
-    let inline findKey (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) =
-        map.FindKey(predicate)
+    let findKey (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) =
+        table.FindKey(predicate)
         
     [<CompiledName("TryFindKey")>]
-    let inline tryFindKey (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) =
-        map.TryFindKey(predicate)
+    let tryFindKey (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) =
+        table.TryFindKey(predicate)
         
     [<CompiledName("TryFindKeyValue")>]
-    let inline tryFindKeyV (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) =
+    let tryFindKeyV (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) =
         map.TryFindKeyV(predicate)
 
     [<CompiledName("TryPick")>]
-    let inline tryPick (mapping : 'Key -> 'Value -> option<'T>) (map : MapNew<'Key, 'Value>) =
-        map.TryPick(mapping)
+    let tryPick (chooser : 'Key -> 'Value -> option<'T>) (table : MapNew<'Key, 'Value>) =
+        table.TryPick(chooser)
         
     [<CompiledName("TryPickValue")>]
-    let inline tryPickV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) =
+    let tryPickV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) =
         map.TryPickV(mapping)
         
     [<CompiledName("Pick")>]
-    let inline pick (mapping : 'Key -> 'Value -> option<'T>) (map : MapNew<'Key, 'Value>) =
-        map.Pick(mapping)
+    let pick (chooser : 'Key -> 'Value -> option<'T>) (table : MapNew<'Key, 'Value>) =
+        table.Pick(chooser)
 
     [<CompiledName("PickValue")>]
-    let inline pickV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) =
+    let pickV (mapping : 'Key -> 'Value -> voption<'T>) (map : MapNew<'Key, 'Value>) =
         map.PickV(mapping)
         
     [<CompiledName("Partition")>]
-    let inline partition (predicate : 'Key -> 'Value -> bool) (map : MapNew<'Key, 'Value>) =
-        map.Partition(predicate)
+    let partition (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) =
+        table.Partition(predicate)
 
