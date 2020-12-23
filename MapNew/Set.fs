@@ -1022,19 +1022,43 @@ type SetNew<'T when 'T : comparison> internal(comparer : IComparer<'T>, root : S
 
         let rec difference (cmp : IComparer<'T>) (l : SetNode<'T>) (r : SetNode<'T>) =
             match r with
-            | :? SetEmpty<'T> ->
-                l
-
             | :? SetLeaf<'T> as r ->
                 match l.TryRemoveV(cmp, r.Value) with
                 | ValueSome n -> n
                 | ValueNone -> l
                 
             | :? SetInner<'T> as r ->
-                failwith "implement me"
+                match l with
+                | :? SetLeaf<'T> as l ->
+                    if contains cmp l.Value r then SetEmpty.Instance
+                    else l :> SetNode<_>
+                | :? SetInner<'T> as l ->
+                    if l.Height > r.Height then
+                        let struct(ll, lr, _lv) = l.SplitV(cmp, r.Value)
+
+                        SetInner.Join(
+                            difference cmp ll r.Left,
+                            difference cmp lr r.Right
+                        )
+                    else
+                        let struct(rl, rr, rv) = r.SplitV(cmp, l.Value)
+                        if rv then
+                            SetInner.Join(
+                                difference cmp l.Left rl,
+                                difference cmp l.Right rr
+                            )
+                        else
+                            SetInner.Create(
+                                difference cmp l.Left rl,
+                                l.Value,
+                                difference cmp l.Right rr
+                            )
+
+                | _ ->
+                    SetEmpty.Instance
 
             | _ ->
-                l // unreachable
+                l // empty
 
         let cmp = defaultComparer
         SetNew(cmp, difference cmp l.Root r.Root)
@@ -1668,7 +1692,7 @@ module SetNew =
     let inline intersect (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Intersect(set1, set2)
     
     [<CompiledName("Difference")>]
-    let inline difference (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Intersect(set1, set2)
+    let inline difference (set1 : SetNew<'T>) (set2 : SetNew<'T>) = SetNew.Difference(set1, set2)
     
     [<CompiledName("UnionMany")>]
     let inline unionMany (sets : #seq<SetNew<'T>>) =

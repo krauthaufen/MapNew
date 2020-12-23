@@ -317,6 +317,20 @@ let tests =
             
             identical (SetNew.union na nb) (Set.union a b)
         )
+
+        testProperty "intersect" (fun (a : Set<int>) (b : Set<int>) ->
+            let na = SetNew.ofArray (Set.toArray a)
+            let nb = SetNew.ofArray (Set.toArray b)
+            
+            identical (SetNew.intersect na nb) (Set.intersect a b)
+        )
+
+        testProperty "difference" (fun (a : Set<int>) (b : Set<int>) ->
+            let na = SetNew.ofArray (Set.toArray a)
+            let nb = SetNew.ofArray (Set.toArray b)
+            
+            identical (SetNew.difference na nb) (Set.difference a b)
+        )
         
 
         testProperty "tryAt" (fun (m : Set<int>) ->
