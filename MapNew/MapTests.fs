@@ -102,6 +102,33 @@ module Map =
                     run rand acc t |> Map.add k v
         run rand Map.empty l
 
+    let neighbours (key : 'K) (map : Map<'K, 'V>) =
+        let l = Map.toList map
+        let rec run (key : 'K) (last : option<'K * 'V>) (l : list<'K * 'V>) =
+            match l with
+            | [] -> last, None, None
+            | [k,v] -> 
+                if key < k then last, None, Some(k,v)
+                elif k < key then Some(k,v), None, None
+                else last, Some(v), None
+            | (k,v) :: rest ->
+                if key < k then last, None, Some(k,v)
+                elif k < key then run key (Some(k,v)) rest
+                else last, Some v, List.tryHead rest
+        run key None l
+        
+    let neighboursAt (index : int) (map : Map<'K, 'V>) =
+        let arr = Map.toArray map
+        if index < 0 then
+            None, None, Array.tryHead arr
+        elif index >= arr.Length then
+            Array.tryLast arr, None, None
+        else
+            let l = if index > 0 then Some arr.[index-1] else None
+            let r = if index < arr.Length-1 then Some arr.[index+1] else None
+            let s = arr.[index] |> snd
+            l, Some s, r
+
 module MapNew =
 
     let ofListRandomOrder (rand : System.Random) (l : list<'K * 'V>) =
@@ -235,6 +262,35 @@ let tests =
             identical a b
         )
     
+    
+        testProperty "neighbours" (fun (m : Map<int, int>) (k : int) ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            let all = k :: List.map fst (Map.toList m)
+
+            for k in all do
+                let (ml,ms,mr) = Map.neighbours k m
+                let (nl,ns,nr) = MapNew.neighbours k mn
+                nl |> should equal ml
+                ns |> should equal ms
+                nr |> should equal mr
+
+        )
+        
+        testProperty "neighboursAt" (fun (m : Map<int, int>) ->
+            let mn = MapNew.ofSeq (Map.toSeq m)
+            identical mn m
+
+            for k in -1 .. mn.Count do
+                let (ml,ms,mr) = Map.neighboursAt k m
+                let (nl,ns,nr) = MapNew.neighboursAt k mn
+                nl |> should equal ml
+                ns |> should equal ms
+                nr |> should equal mr
+
+        )
+
         testProperty "remove" (fun (m : Map<int, int>) (k : int) ->
             let mn = MapNew.ofSeq (Map.toSeq m)
             identical mn m

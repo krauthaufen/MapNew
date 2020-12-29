@@ -1967,6 +1967,119 @@ type MapNew< [<EqualityConditionalOn>] 'Key, [<EqualityConditionalOn;ComparisonC
                 | _ ->
                     ValueNone
             search index root
+            
+    member x.NeighboursAtV(index : int) =
+        
+        let rec minKeyValue (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as l -> 
+                ValueSome struct(l.Key, l.Value)
+            | :? MapInner<'Key, 'Value> as n ->
+                if n.Left.Count = 0 then ValueSome struct(n.Key, n.Value)
+                else minKeyValue n.Left
+            | _ ->
+                ValueNone
+
+        let rec maxKeyValue (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as l -> 
+                ValueSome struct(l.Key, l.Value)
+            | :? MapInner<'Key, 'Value> as n ->
+                if n.Right.Count = 0 then ValueSome struct(n.Key, n.Value)
+                else maxKeyValue n.Right
+            | _ ->
+                ValueNone
+
+        let rec run (cmp : IComparer<_>) (index : int) (l : voption<struct('Key * 'Value)>) (r : voption<struct('Key * 'Value)>) (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as n ->
+                if index > 0 then struct(ValueSome struct(n.Key, n.Value), ValueNone, r)
+                elif index < 0 then struct(l, ValueNone, ValueSome struct(n.Key, n.Value))
+                else struct(l, ValueSome n.Value, r)
+
+            | :? MapInner<'Key, 'Value> as n ->
+                let i = index - n.Left.Count 
+                if i > 0 then run cmp (i-1) (ValueSome struct(n.Key, n.Value)) r n.Right
+                elif i < 0 then run cmp index l (ValueSome struct(n.Key, n.Value)) n.Left
+                else
+                    let l = 
+                        if n.Left.Count <= 0 then l
+                        else maxKeyValue n.Left
+                        
+                    let r = 
+                        if n.Right.Count <= 0 then r
+                        else minKeyValue n.Right
+                    
+                    struct(l, ValueSome n.Value, r)
+
+            | _ ->
+                struct(l, ValueNone, r)
+
+        run comparer index ValueNone ValueNone root
+        
+    member x.NeighboursAt(index : int) =
+        let struct(l, s, r) = x.NeighboursAtV index
+        let l = match l with | ValueSome struct(k,v) -> Some(k,v) | _ -> None
+        let r = match r with | ValueSome struct(k,v) -> Some(k,v) | _ -> None
+        let s = match s with | ValueSome v -> Some v | _ -> None
+        (l, s, r)
+
+    member x.NeighboursV(key : 'Key) =
+        
+        let rec minKeyValue (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as l -> 
+                ValueSome struct(l.Key, l.Value)
+            | :? MapInner<'Key, 'Value> as n ->
+                if n.Left.Count = 0 then ValueSome struct(n.Key, n.Value)
+                else minKeyValue n.Left
+            | _ ->
+                ValueNone
+
+        let rec maxKeyValue (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as l -> 
+                ValueSome struct(l.Key, l.Value)
+            | :? MapInner<'Key, 'Value> as n ->
+                if n.Right.Count = 0 then ValueSome struct(n.Key, n.Value)
+                else maxKeyValue n.Right
+            | _ ->
+                ValueNone
+
+        let rec run (cmp : IComparer<_>) (key : 'Key) (l : voption<struct('Key * 'Value)>) (r : voption<struct('Key * 'Value)>) (node : MapNode<'Key, 'Value>) =
+            match node with
+            | :? MapLeaf<'Key, 'Value> as n ->
+                let c = cmp.Compare(n.Key, key)
+                if c < 0 then struct(ValueSome struct(n.Key, n.Value), ValueNone, r)
+                elif c > 0 then struct(l, ValueNone, ValueSome struct(n.Key, n.Value))
+                else struct(l, ValueSome n.Value, r)
+
+            | :? MapInner<'Key, 'Value> as n ->
+                let c = cmp.Compare(key, n.Key)
+                if c > 0 then run cmp key (ValueSome struct(n.Key, n.Value)) r n.Right
+                elif c < 0 then run cmp key l (ValueSome struct(n.Key, n.Value)) n.Left
+                else
+                    let l = 
+                        if n.Left.Count <= 0 then l
+                        else maxKeyValue n.Left
+                        
+                    let r = 
+                        if n.Right.Count <= 0 then r
+                        else minKeyValue n.Right
+                    
+                    struct(l, ValueSome n.Value, r)
+
+            | _ ->
+                struct(l, ValueNone, r)
+
+        run comparer key ValueNone ValueNone root
+
+    member x.Neighbours(key : 'Key) =
+        let struct(l, s, r) = x.NeighboursV key
+        let l = match l with | ValueSome struct(k,v) -> Some(k,v) | _ -> None
+        let r = match r with | ValueSome struct(k,v) -> Some(k,v) | _ -> None
+        let s = match s with | ValueSome v -> Some v | _ -> None
+        (l, s, r)
 
     member x.CompareTo(other : MapNew<'Key, 'Value>) =
         let mutable le = x.GetEnumerator()
@@ -2429,4 +2542,19 @@ module MapNew =
     [<CompiledName("Partition")>]
     let partition (predicate : 'Key -> 'Value -> bool) (table : MapNew<'Key, 'Value>) =
         table.Partition(predicate)
+        
+    [<CompiledName("Neighbours")>]
+    let neighbours (key : 'Key) (table : MapNew<'Key, 'Value>) =
+        table.Neighbours key
 
+    [<CompiledName("NeighboursValue")>]
+    let neighboursV (key : 'Key) (table : MapNew<'Key, 'Value>) =
+        table.NeighboursV key
+        
+    [<CompiledName("NeighboursAt")>]
+    let neighboursAt (index : int) (table : MapNew<'Key, 'Value>) =
+        table.NeighboursAt index
+
+    [<CompiledName("NeighboursAtValue")>]
+    let neighboursAtV (index : int) (table : MapNew<'Key, 'Value>) =
+        table.NeighboursAtV index
