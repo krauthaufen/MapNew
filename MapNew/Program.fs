@@ -26,6 +26,6 @@ let main _argv =
         .AddJob(Job.Default.WithGcServer(false))
         // .AddJob(Job.Default.WithGcServer(false))
 
-    |> BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.MapBenchmark>
+    |> BenchmarkDotNet.Running.BenchmarkRunner.Run<Benchmark.SetBenchmark>
     |> ignore
     0
