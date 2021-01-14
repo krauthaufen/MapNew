@@ -113,19 +113,19 @@ type MapBenchmark() =
         let largest = arr |> Seq.map fst |> Seq.max
         toolarge <- LanguagePrimitives.GenericOne + largest //System.Decimal.MaxValue //System.Int32.MaxValue
 
-    //[<Benchmark>]
-    //[<BenchmarkCategory("add")>]
-    //member x.``Yam_add``() =
-    //    let r = yam
-    //    for (k, v) in randomElements do
-    //        r.Add(k, v) |> keep
+    [<Benchmark>]
+    [<BenchmarkCategory("add")>]
+    member x.``Yam_add``() =
+        let r = yam
+        for (k, v) in randomElements do
+            r.Add(k, v) |> keep
         
-    //[<Benchmark(Baseline=true)>]
-    //[<BenchmarkCategory("add")>]
-    //member x.``Map_add``() =
-    //    let r = map
-    //    for (k, v) in randomElements do
-    //        Map.add k v r |> keep
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("add")>]
+    member x.``Map_add``() =
+        let r = map
+        for (k, v) in randomElements do
+            Map.add k v r |> keep
 
     //[<Benchmark>]
     //[<BenchmarkCategory("add")>]
@@ -135,21 +135,21 @@ type MapBenchmark() =
     //        MapNew.add k v r |> keep
         
         
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("remove")>]
-//    member x.``Map_remove``() =
-//        let r = map
-//        for i in 0 .. min randomElements.Length data.Length - 1 do
-//            let (k,_) = data.[i]
-//            Map.remove k r |> keep
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("remove")>]
+    member x.``Map_remove``() =
+        let r = map
+        for i in 0 .. min randomElements.Length data.Length - 1 do
+            let (k,_) = data.[i]
+            Map.remove k r |> keep
 
-//    [<Benchmark>]
-//    [<BenchmarkCategory("remove")>]
-//    member x.``MapNew_remove``() =
-//        let r = mapNew
-//        for i in 0 .. min randomElements.Length data.Length - 1 do
-//            let (k,_) = data.[i]
-//            MapNew.remove k r |> keep
+    [<Benchmark>]
+    [<BenchmarkCategory("remove")>]
+    member x.``Yam_remove``() =
+        let r = yam
+        for i in 0 .. min randomElements.Length data.Length - 1 do
+            let (k,_) = data.[i]
+            Yam.remove k r |> keep
         
 //    [<Benchmark>]
 //    [<BenchmarkCategory("remove")>]
@@ -247,21 +247,21 @@ type MapBenchmark() =
 //            sum <- sum + v
 //        sum
         
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("containsKey_all")>]
-//    member x.``Map_containsKey_all``() =
-//        let mutable res = true
-//        for (k, _) in data do
-//            res <- Map.containsKey k map && res
-//        res
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("containsKey_all")>]
+    member x.``Map_containsKey_all``() =
+        let mutable res = true
+        for (k, _) in data do
+            res <- Map.containsKey k map && res
+        res
 
-//    [<Benchmark>]
-//    [<BenchmarkCategory("containsKey_all")>]
-//    member x.``MapNew_containsKey_all``() =
-//        let mutable res = true
-//        for (k, _) in data do
-//            res <- mapNew.ContainsKey k && res
-//        res
+    [<Benchmark>]
+    [<BenchmarkCategory("containsKey_all")>]
+    member x.``Yam_containsKey_all``() =
+        let mutable res = true
+        for (k, _) in data do
+            res <- yam.ContainsKey k && res
+        res
        
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("containsKey_nonexisting")>]
