@@ -24,9 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="MapCurrent.fs" />
     <Compile Include="Sorting.fs" />
     <Compile Include="Set.fs" />
     <Compile Include="Map.fs" />
+    <Compile Include="Yam.fs" />
     <Compile Include="SetTests.fs" />
     <Compile Include="MapTests.fs" />
     <Compile Include="SortBench.fs" />

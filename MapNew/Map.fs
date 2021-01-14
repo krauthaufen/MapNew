@@ -44,6 +44,14 @@ module MapNewImplementation =
         abstract member ChangeV : comparer : IComparer<'Key> * key : 'Key * (voption<'Value> -> voption<'Value>) -> MapNode<'Key, 'Value>
 
 
+        abstract member ReplaceRange : 
+            comparer : IComparer<'Key> * 
+            minInclusive : 'Key * maxInclusive : 'Key * 
+            left : voption<struct('Key * 'Value)> * right : voption<struct('Key * 'Value)> * 
+            replace : (voption<struct('Key * 'Value)> -> voption<struct('Key * 'Value)> -> struct(voption<'Value> * voption<'Value>))
+                -> MapNode<'Key, 'Value>
+
+
     and [<Sealed>]
         MapEmpty<'Key, 'Value> private() =
         inherit MapNode<'Key, 'Value>()
@@ -99,6 +107,22 @@ module MapNewImplementation =
             match update ValueNone with
             | ValueNone -> x :> MapNode<_,_>
             | ValueSome v -> MapLeaf(key, v) :> MapNode<_,_>
+
+        override x.ReplaceRange(_comparer, min, max, l, r, replacement) =
+            let struct(l, r) = replacement l r
+            match l with
+            | ValueSome l ->
+                match r with
+                | ValueSome r ->    
+                    MapInner(MapEmpty.Instance, min, l, MapLeaf(max, r)) :> MapNode<_,_>
+                | ValueNone ->
+                    MapLeaf(min, l) :> MapNode<_,_>
+            | ValueNone ->
+                match r with
+                | ValueSome r ->
+                    MapLeaf(max, r) :> MapNode<_,_>
+                | ValueNone ->
+                    x :> MapNode<_,_>
 
     and [<Sealed>]
         MapLeaf<'Key, 'Value> =
@@ -255,6 +279,63 @@ module MapNewImplementation =
                         MapLeaf(key, v) :> MapNode<_,_>
                     | ValueNone ->
                         MapEmpty.Instance
+
+
+            override x.ReplaceRange(comparer, minKey : 'Key, maxKey : 'Key, l, r, replacement) =
+                let cMin = comparer.Compare(x.Key, minKey)
+                if cMin >= 0 then
+                    // key >= min
+                    let cMax = comparer.Compare(x.Key, maxKey)
+                    if cMax <= 0 then
+                        // key >= min && key <= max
+                        let struct(minValue, maxValue) = replacement l r
+                        match minValue with
+                        | ValueSome l ->
+                            match maxValue with 
+                            | ValueSome r ->
+                                MapInner(MapEmpty.Instance, minKey, l, MapLeaf(maxKey, r)) :> MapNode<_,_>
+                            | ValueNone ->
+                                MapLeaf(minKey, l) :> MapNode<_,_>
+                        | ValueNone ->
+                            match maxValue with
+                            | ValueSome r ->
+                                MapLeaf(maxKey, r) :> MapNode<_,_>
+                            | ValueNone ->
+                                MapEmpty.Instance
+                    else
+                        // key > max
+                        let struct(minValue, maxValue) = replacement l (ValueSome struct(x.Key, x.Value))
+                        match minValue with
+                        | ValueSome l ->
+                            match maxValue with 
+                            | ValueSome r ->
+                                MapInner(MapLeaf(minKey, l), maxKey, r, x) :> MapNode<_,_>
+                            | ValueNone ->
+                                MapInner(MapEmpty.Instance, minKey, l, x) :> MapNode<_,_>
+                        | ValueNone ->
+                            match maxValue with
+                            | ValueSome r ->
+                                MapInner(MapEmpty.Instance, maxKey, r, x) :> MapNode<_,_>
+                            | ValueNone ->
+                                x :> MapNode<_,_>
+                else
+                    // key < min
+                    let struct(minValue, maxValue) = replacement (ValueSome struct(x.Key, x.Value)) r
+                    match minValue with
+                    | ValueSome l ->
+                        match maxValue with 
+                        | ValueSome r ->
+                            MapInner(x, minKey, l, MapLeaf(maxKey, r)) :> MapNode<_,_>
+                        | ValueNone ->
+                            MapInner(x, minKey, l, MapEmpty.Instance) :> MapNode<_,_>
+                    | ValueNone ->
+                        match maxValue with
+                        | ValueSome r ->
+                            MapInner(x, maxKey, r, MapEmpty.Instance) :> MapNode<_,_>
+                        | ValueNone ->
+                            x :> MapNode<_,_>
+                
+                    
 
             new(k : 'Key, v : 'Value) = { Key = k; Value = v}
         end
@@ -670,6 +751,93 @@ module MapNewImplementation =
                         ) :> MapNode<_,_>
                     | ValueNone ->
                         MapInner.Join(x.Left, x.Right)
+
+            override x.ReplaceRange(comparer, minKey : 'Key, maxKey : 'Key, l, r, replacement) =
+
+            
+                let rec tryMax (node : MapNode<'Key, 'Value>) =
+                    match node with
+                    | :? MapLeaf<'Key, 'Value> as l -> 
+                        ValueSome struct(l.Key, l.Value)
+                    | :? MapInner<'Key, 'Value> as n ->
+                        if n.Right.Count = 0 then ValueSome struct(n.Key, n.Value)
+                        else tryMax n.Right
+                    | _ ->
+                        ValueNone
+                        
+                let rec tryMin (node : MapNode<'Key, 'Value>) =
+                    match node with
+                    | :? MapLeaf<'Key, 'Value> as l -> 
+                        ValueSome struct(l.Key, l.Value)
+                    | :? MapInner<'Key, 'Value> as n ->
+                        if n.Left.Count = 0 then ValueSome struct(n.Key, n.Value)
+                        else tryMin n.Left
+                    | _ ->
+                        ValueNone
+
+                let cMin = comparer.Compare(x.Key, minKey)
+                if cMin < 0 then
+                    // key < minKey
+                    MapInner.Create(
+                        x.Left, 
+                        x.Key, x.Value, 
+                        x.Right.ReplaceRange(comparer, minKey, maxKey, ValueSome struct(x.Key, x.Value), r, replacement)
+                    )
+                elif cMin > 0 then
+                    // key > minKey
+                    let cMax = comparer.Compare(x.Key, maxKey)
+                    if cMax < 0 then
+                        // key < max
+                        let lv = x.Left.WithMax(comparer, minKey, false)
+                        let rv = x.Right.WithMin(comparer, maxKey, false)
+
+                        let ll = match tryMax lv with | ValueSome t -> ValueSome t | _ -> l
+                        let rr = match tryMin rv with | ValueSome t -> ValueSome t | _ -> r
+
+                        let struct(minValue, maxValue) = replacement ll rr
+                        match minValue with
+                        | ValueSome minValue ->
+                            match maxValue with
+                            | ValueSome maxValue ->
+                                if lv.Height < rv.Height then MapInner.Create(lv.Add(comparer, minKey, minValue), maxKey, maxValue, rv)
+                                else MapInner.Create(lv, minKey, minValue, rv.Add(comparer, maxKey, maxValue))
+                            | ValueNone ->
+                                MapInner.Create(lv, minKey, minValue, rv)
+                        | ValueNone ->
+                            match maxValue with
+                            | ValueSome maxValue ->
+                                MapInner.Create(lv, maxKey, maxValue, rv)
+                            | ValueNone ->
+                                MapInner.Join(lv, rv)
+
+                    elif cMax > 0 then  
+                        // key > max
+                        MapInner.Create(
+                            x.Left.ReplaceRange(comparer, minKey, maxKey, l, ValueSome struct(x.Key, x.Value), replacement), 
+                            x.Key, x.Value, 
+                            x.Right
+                        )
+                    else
+                        // key = max
+                        let rr =
+                            match tryMin x.Right with
+                            | ValueSome t -> ValueSome t
+                            | ValueNone -> r
+                        MapInner.Join(
+                            x.Left.ReplaceRange(comparer, minKey, maxKey, l, rr, replacement), 
+                            x.Right
+                        )
+                else
+                    // key = minKey
+                    let ll =
+                        match tryMax x.Left with
+                        | ValueSome t -> ValueSome t
+                        | ValueNone -> l
+                    MapInner.Join(
+                        x.Left, 
+                        x.Right.ReplaceRange(comparer, minKey, maxKey, ll, r, replacement)
+                    )
+
 
             new(l : MapNode<'Key, 'Value>, k : 'Key, v : 'Value, r : MapNode<'Key, 'Value>) =
                 assert(l.Count > 0 || r.Count > 0)      // not both empty
@@ -1934,6 +2102,30 @@ type MapNew< [<EqualityConditionalOn>] 'Key, [<EqualityConditionalOn;ComparisonC
     member x.ChangeV(key : 'Key, update : voption<'Value> -> voption<'Value>) =
         MapNew(comparer, root.ChangeV(comparer, key, update))
 
+    member x.ReplaceRange(min : 'Key, max : 'Key, replacement : voption<struct('Key * 'Value)> -> voption<struct('Key * 'Value)> -> struct(voption<'Value> * voption<'Value>)) =
+        let c = comparer.Compare(min, max)
+        if c = 0 then
+            let struct(l, s, r) = x.NeighboursV(min)
+            let struct(lv, rv) = replacement l r
+
+            let mutable res = x
+            match s with
+            | ValueSome _ -> res <- res.Remove(min)
+            | ValueNone -> ()
+
+            match rv with
+            | ValueSome rv -> res <- res.Add(min, rv)
+            | ValueNone ->
+                match lv with
+                | ValueSome lv -> res <- res.Add(min, lv)
+                | ValueNone -> ()
+            res
+        elif c > 0 then
+            x
+        else
+            let n = root.ReplaceRange(comparer, min, max, ValueNone, ValueNone, replacement)
+            MapNew(comparer, n)
+
     member x.TryAt(index : int) =
         if index < 0 || index >= root.Count then None
         else 
@@ -2384,6 +2576,10 @@ module MapNew =
     
     [<CompiledName("ChangeValue")>]
     let changeV (key : 'Key) (update : voption<'Value> -> voption<'Value>) (map : MapNew<'Key, 'Value>) = map.ChangeV(key, update)
+        
+    [<CompiledName("ReplaceRange")>]
+    let replaceRange (minKey : 'Key) (maxKey : 'Key) (replace : voption<struct('Key * 'Value)> -> voption<struct('Key * 'Value)> -> struct(voption<'Value> * voption<'Value>)) (map : MapNew<'Key, 'Value>) = 
+        map.ReplaceRange(minKey, maxKey, replace)
 
     [<CompiledName("TryFind")>]
     let tryFind (key : 'Key) (table : MapNew<'Key, 'Value>) = table.TryFind(key)
