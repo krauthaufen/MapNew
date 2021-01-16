@@ -40,7 +40,7 @@ type ReferenceNumber(value : decimal) =
 [<GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)>]
 type MapBenchmark() =
 
-    [<DefaultValue; Params(1, 5, 10, 100, 1000)>]
+    [<DefaultValue; Params(100)>]
     val mutable public Count : int
 
     let mutable data : (_ * _)[] = [||]
@@ -143,26 +143,27 @@ type MapBenchmark() =
             let (k,_) = data.[i]
             Map.remove k r |> keep
 
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("ofArray")>]
-    member x.``Map_ofArray``() =
-        Map.ofArray data
-        
     [<Benchmark>]
     [<BenchmarkCategory("ofArray")>]
     member x.``Yam_ofArray``() =
         Yam.ofArray data
 
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("ofArray")>]
+    member x.``Map_ofArray``() =
+        Map.ofArray data
+        
+
+    [<Benchmark>]
+    [<BenchmarkCategory("toArray")>]
+    member x.``Yam_toArray``() =
+        Yam.toArray yam
 
     [<Benchmark(Baseline = true)>]
     [<BenchmarkCategory("toArray")>]
     member x.``Map_toArray``() =
         Map.toArray map
         
-    [<Benchmark>]
-    [<BenchmarkCategory("toArray")>]
-    member x.``MapNew_toArray``() =
-        Yam.toArray yam
 
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("enumerate")>]
@@ -196,6 +197,14 @@ type MapBenchmark() =
 //            sum <- sum + v
 //        sum
         
+    [<Benchmark>]
+    [<BenchmarkCategory("containsKey_all")>]
+    member x.``Yam_containsKey_all``() =
+        let mutable res = true
+        for (k, _) in data do
+            res <- yam.ContainsKey k && res
+        res
+
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("containsKey_all")>]
     member x.``Map_containsKey_all``() =
@@ -205,22 +214,15 @@ type MapBenchmark() =
         res
 
     [<Benchmark>]
-    [<BenchmarkCategory("containsKey_all")>]
-    member x.``Yam_containsKey_all``() =
-        let mutable res = true
-        for (k, _) in data do
-            res <- yam.ContainsKey k && res
-        res
+    [<BenchmarkCategory("containsKey_nonexisting")>]
+    member x.``Yam_containsKey_nonexisting``() =
+        yam.ContainsKey toolarge
        
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("containsKey_nonexisting")>]
     member x.``Map_containsKey_nonexisting``() =
         Map.containsKey toolarge map
         
-    [<Benchmark>]
-    [<BenchmarkCategory("containsKey_nonexisting")>]
-    member x.``Yam_containsKey_nonexisting``() =
-        yam.ContainsKey toolarge
          
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("tryFind")>]
@@ -258,16 +260,16 @@ type MapBenchmark() =
 //        for (k, _) in data do
 //            res <- MapNew.remove k res
 //        res
+    [<Benchmark>]
+    [<BenchmarkCategory("exists")>]
+    member x.``Yam_exists``() =
+        yam |> Yam.exists (fun _ _ -> false)
         
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("exists")>]
     member x.``Map_exists``() =
         map |> Map.exists (fun _ _ -> false)
         
-    [<Benchmark>]
-    [<BenchmarkCategory("exists")>]
-    member x.``Yam_exists``() =
-        yam |> Yam.exists (fun _ _ -> false)
         
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("fold")>]
