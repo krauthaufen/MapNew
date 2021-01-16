@@ -2,6 +2,7 @@
 open MapNew
 open BenchmarkDotNet.Configs
 open BenchmarkDotNet.Jobs
+open System.Runtime.CompilerServices
 
 module Mappy =
     
@@ -241,24 +242,56 @@ module Mappy =
 
 
 
+[<MethodImpl(MethodImplOptions.NoInlining)>]
+let keep (v : 'a) =
+    ()
 
 let profiling() =
     let rand = System.Random()
-    let arr = Array.init ((1 <<< 20) - 1) (fun i -> (rand.Next 1000, i))
+    let arr = Array.init 1000 (fun i -> (rand.Next 1000, i))
 
+    let randomKeys = Array.init 1000000 (fun i -> rand.Next 1000)
+
+    let mutable i = 0
+    let map = Yam.ofArray arr
     while true do
-        let m = MapNew.ofArray arr
-        System.Console.WriteLine("{0}", m.Count)
+        Yam.add randomKeys.[i] 123 map |> keep
+        i <- i + 1
+        if i >= randomKeys.Length then i <- 0
 
 open MapTests
+
+[<MethodImpl(MethodImplOptions.NoInlining ||| MethodImplOptions.NoOptimization)>]
+let memory (creator : unit -> 'a) =
+    creator() |> ignore
+    let mutable a = Unchecked.defaultof<_>
+    System.GC.Collect(3, System.GCCollectionMode.Forced, true, true)
+    System.GC.WaitForFullGCComplete() |> ignore
+    let before = System.GC.GetTotalMemory(true)
+    a <- creator()
+    System.GC.Collect(3, System.GCCollectionMode.Forced, true, true)
+    System.GC.WaitForFullGCComplete() |> ignore
+    let size = System.GC.GetTotalMemory(true) - before
+    size + int64 (float (Unchecked.hash a % 2) - 0.5)
+
+open Temp.FSharp.Collections
 
 [<EntryPoint>]
 let main _argv =
     printfn "FSharp.Core: %A" typeof<list<int>>.Assembly.FullName
+    
+    //for e in 1 .. 20 do
+    //    let size = 1 <<< e
+    //    let l = List.init size (fun i -> i, i)
+    //    let mm = memory (fun () -> Map.ofList l)
+    //    let my = memory (fun () -> Yam.ofList l)
+
+    //    printfn "%.2f%% %d %d" (100.0 * float my / float mm) mm my
+
+    //exit 0
 
 
-    let bla = Yam.ofList [(1, 0); (2, 0); (0, 0)]
-    Yam.checkConsistency bla
+    //profiling()
     //let m = Map.empty
     //let mn = MapNew.empty
 

@@ -40,7 +40,7 @@ type ReferenceNumber(value : decimal) =
 [<GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)>]
 type MapBenchmark() =
 
-    [<DefaultValue; Params(1000)>]
+    [<DefaultValue; Params(1, 5, 10, 100, 1000)>]
     val mutable public Count : int
 
     let mutable data : (_ * _)[] = [||]
@@ -127,22 +127,6 @@ type MapBenchmark() =
         for (k, v) in randomElements do
             Map.add k v r |> keep
 
-    //[<Benchmark>]
-    //[<BenchmarkCategory("add")>]
-    //member x.``MapNew_add``() =
-    //    let r = mapNew
-    //    for (k, v) in randomElements do
-    //        MapNew.add k v r |> keep
-        
-        
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("remove")>]
-    member x.``Map_remove``() =
-        let r = map
-        for i in 0 .. min randomElements.Length data.Length - 1 do
-            let (k,_) = data.[i]
-            Map.remove k r |> keep
-
     [<Benchmark>]
     [<BenchmarkCategory("remove")>]
     member x.``Yam_remove``() =
@@ -151,14 +135,13 @@ type MapBenchmark() =
             let (k,_) = data.[i]
             Yam.remove k r |> keep
         
-//    [<Benchmark>]
-//    [<BenchmarkCategory("remove")>]
-//    member x.``MapNew_removeMatch``() =
-//        let r = mapNew
-//        for i in 0 .. min randomElements.Length data.Length - 1 do
-//            let (k,_) = data.[i]
-//            r.RemoveMatch(k) |> keep
-
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("remove")>]
+    member x.``Map_remove``() =
+        let r = map
+        for i in 0 .. min randomElements.Length data.Length - 1 do
+            let (k,_) = data.[i]
+            Map.remove k r |> keep
 
     [<Benchmark(Baseline=true)>]
     [<BenchmarkCategory("ofArray")>]
@@ -170,51 +153,17 @@ type MapBenchmark() =
     member x.``Yam_ofArray``() =
         Yam.ofArray data
 
-    [<Benchmark>]
-    [<BenchmarkCategory("ofArray")>]
-    member x.``MapNew_ofArray``() =
-        MapNew.ofArray data
-        
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("ofList")>]
-//    member x.``Map_ofList``() =
-//        Map.ofList list
-        
-//    [<Benchmark>]
-//    [<BenchmarkCategory("ofList")>]
-//    member x.``MapNew_ofList``() =
-//        MapNew.ofList list
-        
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("ofSeq")>]
-//    member x.``Map_ofSeq``() =
-//        Map.ofSeq list
-        
-//    [<Benchmark>]
-//    [<BenchmarkCategory("ofSeq")>]
-//    member x.``MapNew_ofSeq``() =
-//        MapNew.ofSeq list
 
-//    [<Benchmark(Baseline = true)>]
-//    [<BenchmarkCategory("toArray")>]
-//    member x.``Map_toArray``() =
-//        Map.toArray map
+    [<Benchmark(Baseline = true)>]
+    [<BenchmarkCategory("toArray")>]
+    member x.``Map_toArray``() =
+        Map.toArray map
         
-//    [<Benchmark>]
-//    [<BenchmarkCategory("toArray")>]
-//    member x.``MapNew_toArray``() =
-//        MapNew.toArray mapNew
-        
-//    [<Benchmark(Baseline = true)>]
-//    [<BenchmarkCategory("toList")>]
-//    member x.``Map_toList``() =
-//        Map.toList map
-        
-//    [<Benchmark>]
-//    [<BenchmarkCategory("toList")>]
-//    member x.``MapNew_toList``() =
-//        MapNew.toList mapNew
-        
+    [<Benchmark>]
+    [<BenchmarkCategory("toArray")>]
+    member x.``MapNew_toArray``() =
+        Yam.toArray yam
+
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("enumerate")>]
 //    member x.``Map_enumerate``() =
@@ -263,15 +212,15 @@ type MapBenchmark() =
             res <- yam.ContainsKey k && res
         res
        
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("containsKey_nonexisting")>]
-//    member x.``Map_containsKey_nonexisting``() =
-//        Map.containsKey toolarge map
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("containsKey_nonexisting")>]
+    member x.``Map_containsKey_nonexisting``() =
+        Map.containsKey toolarge map
         
-//    [<Benchmark>]
-//    [<BenchmarkCategory("containsKey_nonexisting")>]
-//    member x.``MapNew_containsKey_nonexisting``() =
-//        mapNew.ContainsKey toolarge
+    [<Benchmark>]
+    [<BenchmarkCategory("containsKey_nonexisting")>]
+    member x.``Yam_containsKey_nonexisting``() =
+        yam.ContainsKey toolarge
          
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("tryFind")>]
@@ -310,15 +259,15 @@ type MapBenchmark() =
 //            res <- MapNew.remove k res
 //        res
         
-//    [<Benchmark(Baseline=true)>]
-//    [<BenchmarkCategory("exists")>]
-//    member x.``Map_exists``() =
-//        map |> Map.exists (fun _ _ -> false)
+    [<Benchmark(Baseline=true)>]
+    [<BenchmarkCategory("exists")>]
+    member x.``Map_exists``() =
+        map |> Map.exists (fun _ _ -> false)
         
-//    [<Benchmark>]
-//    [<BenchmarkCategory("exists")>]
-//    member x.``MapNew_exists``() =
-//        mapNew |> MapNew.exists (fun _ _ -> false)
+    [<Benchmark>]
+    [<BenchmarkCategory("exists")>]
+    member x.``Yam_exists``() =
+        yam |> Yam.exists (fun _ _ -> false)
         
 //    [<Benchmark(Baseline=true)>]
 //    [<BenchmarkCategory("fold")>]

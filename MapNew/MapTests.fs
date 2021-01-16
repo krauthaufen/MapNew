@@ -577,7 +577,7 @@ module Yam =
                 let lh = checkCount n.Left
                 let rh = checkCount n.Right
                 let h = 1 + lh + rh
-                if n.Count <> h then failwithf "node has bad count: %d (should be %d)" n.Count h
+                //if n.Count <> h then failwithf "node has bad count: %d (should be %d)" n.Count h
                 h
 
         checkHeight mn.Root |> ignore
@@ -606,10 +606,29 @@ module Yam =
 [<Tests>]
 let yamTests =
 
-    
+    let memory (creator : unit -> 'a) =
+        creator() |> ignore
+        System.GC.Collect(3, System.GCCollectionMode.Forced, true, true)
+        System.GC.WaitForFullGCComplete() |> ignore
+        let before = System.GC.GetTotalMemory(true)
+        let a = creator()
+        System.GC.Collect(3, System.GCCollectionMode.Forced, true, true)
+        System.GC.WaitForFullGCComplete() |> ignore
+        let size = System.GC.GetTotalMemory(true) - before
+        size + int64 (float (Unchecked.hash a % 2) - 0.5)
+
 
 
     testList "Yam" [
+        //testProperty "memorySize" (fun (size : uint32) ->
+        //    let l = List.init (int size) (fun i -> i,i)
+        //    let mm = memory (fun () -> Map.ofList l)
+        //    let my = memory (fun () -> Yam.ofList l)
+
+        //    mm |> should be (greaterThanOrEqualTo (my * 3L / 2L))
+
+
+        //)
 
         testProperty "ofSeq" (fun (l : list<int * int>) ->
             let m = Map.ofList l
@@ -887,36 +906,36 @@ let yamTests =
             identical n1 m1
         )
 
-        //testProperty "withRange" (fun (m : Map<int, int>) ->
-        //    let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
-        //    let arr = Map.toArray m
-        //    let mn = Yam.ofArray arr
-        //    identical mn m
+        testProperty "withRange" (fun (m : Map<int, int>) ->
+            let m = m |> Map.add 1 2 |> Map.add 3 4 |> Map.add 5 6
+            let arr = Map.toArray m
+            let mn = Yam.ofArray arr
+            identical mn m
 
-        //    let l,_ = arr.[arr.Length / 3]
-        //    let h,_ = arr.[(2 * arr.Length) / 3]
+            let l,_ = arr.[arr.Length / 3]
+            let h,_ = arr.[(2 * arr.Length) / 3]
 
-        //    let a = Yam.withRange l h mn
-        //    let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
-        //    identical a b
-        //)
+            let a = Yam.slice l h mn
+            let b = m |> Map.filter (fun k _ -> k >= l && k <= h)
+            identical a b
+        )
 
-        //testProperty "union" (fun (a : Map<int, int>) (b : Map<int, int>) ->
-        //    let na = Yam.ofArray (Map.toArray a)
-        //    let nb = Yam.ofArray (Map.toArray b)
+        testProperty "union" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = Yam.ofArray (Map.toArray a)
+            let nb = Yam.ofArray (Map.toArray b)
             
-        //    identical (Yam.union na nb) (Map.union a b)
-        //)
+            identical (Yam.union na nb) (Map.union a b)
+        )
         
-        //testProperty "unionWith" (fun (a : Map<int, int>) (b : Map<int, int>) ->
-        //    let na = Yam.ofArray (Map.toArray a)
-        //    let nb = Yam.ofArray (Map.toArray b)
+        testProperty "unionWith" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = Yam.ofArray (Map.toArray a)
+            let nb = Yam.ofArray (Map.toArray b)
             
-        //    let resolve k l r =
-        //        27*k+13*l+r
+            let resolve k l r =
+                27*k+13*l+r
 
-        //    identical (Yam.unionWith resolve na nb) (Map.unionWith resolve a b)
-        //)
+            identical (Yam.unionWith resolve na nb) (Map.unionWith resolve a b)
+        )
 
 
         //testProperty "tryAt" (fun (m : Map<int, int>) ->

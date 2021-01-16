@@ -41,58 +41,88 @@ module YamImplementation =
     [<Sealed; AllowNullLiteral; NoEquality; NoComparison>]
     type Inner<'Key, 'Value> =
         inherit Node<'Key, 'Value>
+        #if COUNT
         val mutable public Count : int
+        #endif
         val mutable public Left : Node<'Key, 'Value>
         val mutable public Right : Node<'Key, 'Value>
+       
+        #if COUNT
+        static member inline GetCount(node : Node<'Key, 'Value>) =
+            if isNull node then 0
+            elif node.Height = 1uy then 1
+            else (node :?> Inner<'Key, 'Value>).Count
+        #endif
 
-        static member inline GetCnt(node : Node<'Key, 'Value>, height : byref<uint8>) =
-            if isNull node then
-                height <- 0uy
-                0
-            else
-                height <- node.Height
-                if height = 1uy then 1
-                else (node :?> Inner<'Key, 'Value>).Count
+        static member inline GetHeight(node : Node<'Key, 'Value>) =
+            if isNull node then 0uy
+            else node.Height
 
         static member inline FixHeightAndCount(inner : Inner<'Key, 'Value>) =
-            let mutable lh = 0uy
-            let mutable rh = 0uy
-            let lc = Inner.GetCnt(inner.Left, &lh)
-            let rc = Inner.GetCnt(inner.Right, &rh)
+            #if COUNT
+            let lc = Inner.GetCount inner.Left
+            let rc = Inner.GetCount inner.Right
+            let lh = if lc > 0 then inner.Left.Height else 0uy
+            let rh = if rc > 0 then inner.Right.Height else 0uy
             inner.Count <- 1 + lc + rc
             inner.Height <- 1uy + max lh rh
+            #else
+            inner.Height <- 1uy + max (Inner.GetHeight inner.Left) (Inner.GetHeight inner.Right)
+            #endif
 
+        #if COUNT
         new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>, h : byte, cnt : int) =
             { inherit  Node<'Key, 'Value>(k, v, h); Left = l; Right = r; Count = cnt }
+        #else
+        new(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>, h : byte) =
+            { inherit  Node<'Key, 'Value>(k, v, h); Left = l; Right = r}
+        #endif
+
+        static member Create(l : Node<'Key, 'Value>, k : 'Key, v : 'Value, r : Node<'Key, 'Value>) =
+            if isNull l && isNull r then Node(k, v)
+            else 
+                #if COUNT
+                let lc = Inner.GetCount l
+                let rc = Inner.GetCount r
+                let lh = if lc > 0 then l.Height else 0uy
+                let rh = if rc > 0 then r.Height else 0uy
+                Inner(l, k, v, r, 1uy + max lh rh, 1 + lc + rc) :> Node<_,_>
+                #else
+                let hl = Inner.GetHeight l
+                let hr = Inner.GetHeight r
+                Inner(l, k, v, r, 1uy + max hl hr) :> Node<_,_>
+                #endif
 
         
     let inline height (n : Node<'Key, 'Value>) =
         if isNull n then 0uy
         else n.Height
             
-    let inline count (n : Node<'Key, 'Value>) =
+    let rec count (n : Node<'Key, 'Value>) =
         if isNull n then 0
         elif n.Height = 1uy then 1
+        #if COUNT
         else (n :?> Inner<'Key, 'Value>).Count
+        #else
+        else 
+            let n = n :?> Inner<'Key, 'Value>
+            1 + count n.Left + count n.Right
+        #endif
             
     let inline balance (n : Inner<'Key, 'Value>) =
         int (height n.Right) - int (height n.Left)
 
-    // abs (balance l r) <= 3 (as caused by add/remove)
     let unsafeBinary (l : Node<'Key, 'Value>) (k : 'Key) (v : 'Value) (r : Node<'Key, 'Value>) =
-        let inline newBinary (l : Node<'Key, 'Value>) (k : 'Key) (v : 'Value) (r : Node<'Key, 'Value>) =
-            if isNull l && isNull r then Node(k, v)
-            else 
-                let mutable hl = 0uy
-                let mutable hr = 0uy
-                let cl = Inner.GetCnt(l, &hl)
-                let cr = Inner.GetCnt(r, &hr)
-                Inner(l, k, v, r, 1uy + max hl hr, 1 + cl + cr) :> Node<_,_>
 
-        let mutable lh = 0uy
-        let mutable rh = 0uy
-        let lc = Inner.GetCnt(l, &lh)
-        let rc = Inner.GetCnt(r, &rh)
+        #if COUNT
+        let lc = Inner.GetCount l
+        let rc = Inner.GetCount r
+        let lh = if lc > 0 then l.Height else 0uy
+        let rh = if rc > 0 then r.Height else 0uy
+        #else
+        let lh = height l
+        let rh = height r
+        #endif
 
         let b = int rh - int lh
         if b > 2 then
@@ -101,17 +131,19 @@ module YamImplementation =
             let rb = balance r
             if rb > 0 then
                 // right right 
-                newBinary 
-                    (newBinary l k v r.Left)
-                    r.Key r.Value
+                Inner.Create( 
+                    Inner.Create(l, k, v, r.Left),
+                    r.Key, r.Value,
                     r.Right
+                )
             else
                 // right left
                 let rl = r.Left :?> Inner<'Key, 'Value>
-                newBinary
-                    (newBinary l k v rl.Left)
-                    rl.Key rl.Value
-                    (newBinary rl.Right r.Key r.Value r.Right)
+                Inner.Create( 
+                    Inner.Create(l, k, v, rl.Left),
+                    rl.Key, rl.Value,
+                    Inner.Create(rl.Right, r.Key, r.Value, r.Right)
+                )
 
         elif b < -2 then
             // lh > rh + 2
@@ -119,42 +151,57 @@ module YamImplementation =
             let lb = balance l
             if lb < 0 then
                 // left left
-                newBinary 
-                    l.Left
-                    l.Key l.Value
-                    (newBinary l.Right k v r)
+                Inner.Create(
+                    l.Left,
+                    l.Key, l.Value,
+                    Inner.Create(l.Right, k, v, r)
+                )
             else
                 // left right
                 let lr = l.Right :?> Inner<'Key, 'Value>
-                newBinary 
-                    (newBinary l.Left l.Key l.Value lr.Left)
-                    lr.Key lr.Value
-                    (newBinary lr.Right k v r)
+                Inner.Create(
+                    Inner.Create(l.Left, l.Key, l.Value, lr.Left),
+                    lr.Key, lr.Value,
+                    Inner.Create(lr.Right, k, v, r)
+                )
 
         elif lh = 0uy && rh = 0uy then Node(k, v)
+        #if COUNT
         else Inner(l, k, v, r, 1uy + max lh rh, 1 + lc + rc) :> Node<_,_>
+        #else
+        else Inner(l, k, v, r, 1uy + max lh rh) :> Node<_,_>
+        #endif
 
-    let rec unsafeRemoveMin (n : Node<'Key, 'Value>) =
+    let rec unsafeRemoveMin (key : byref<'Key>) (value : byref<'Value>) (n : Node<'Key, 'Value>) =
         if n.Height = 1uy then
-            struct(n.Key, n.Value, null)
+            key <- n.Key
+            value <- n.Value
+            null
         else
             let n = n :?> Inner<'Key, 'Value>
             if isNull n.Left then
-                struct(n.Key, n.Value, n.Right)
+                key <- n.Key
+                value <- n.Value
+                n.Right
             else
-                let struct(k, v, newLeft) = unsafeRemoveMin n.Left
-                struct(k, v, unsafeBinary newLeft n.Key n.Value n.Right)
+                let newLeft = unsafeRemoveMin &key &value n.Left
+                unsafeBinary newLeft n.Key n.Value n.Right
                     
-    let rec unsafeRemoveMax (n : Node<'Key, 'Value>) =
+    let rec unsafeRemoveMax (key : byref<'Key>) (value : byref<'Value>) (n : Node<'Key, 'Value>) =
         if n.Height = 1uy then
-            struct(n.Key, n.Value, null)
+            key <- n.Key
+            value <- n.Value
+            null
         else
             let n = n :?> Inner<'Key, 'Value>
             if isNull n.Right then
-                struct(n.Key, n.Value, n.Left)
+                key <- n.Key
+                value <- n.Value
+                n.Left
             else
-                let struct(k, v, newRight) = unsafeRemoveMax n.Right
-                struct(k, v, unsafeBinary n.Left n.Key n.Value newRight)
+                let newRight = unsafeRemoveMax &key &value n.Right
+                unsafeBinary n.Left n.Key n.Value newRight
+
 
     let rebalanceUnsafe (node : Inner<'Key, 'Value>) =
         let lh = height node.Left
@@ -187,7 +234,9 @@ module YamImplementation =
                 node.Value <- v12
                 node.Left <- r
                 node.Right <- t2
+                #if COUNT
                 node.Count <- 1 + r.Count + (count t2)
+                #endif
                 node.Height <- 1uy + max r.Height (height t2)
 
             else
@@ -228,7 +277,9 @@ module YamImplementation =
                 node.Value <- v12
                 node.Left <- a
                 node.Right <- b
+                #if COUNT
                 node.Count <- 1 + a.Count + b.Count
+                #endif
                 node.Height <- 1uy + max a.Height b.Height
 
         elif b < -2 then
@@ -260,7 +311,9 @@ module YamImplementation =
                 node.Value <- v01
                 node.Left <- t0
                 node.Right <- a
+                #if COUNT
                 node.Count <- 1 + (count t0) + a.Count
+                #endif
                 node.Height <- 1uy + max (height t0) a.Height
 
             else
@@ -302,7 +355,9 @@ module YamImplementation =
                 node.Value <- v12
                 node.Left <- a
                 node.Right <- b
+                #if COUNT
                 node.Count <- 1 + a.Count + b.Count
+                #endif
                 node.Height <- 1uy + max a.Height b.Height
         else
             Inner.FixHeightAndCount node
@@ -314,21 +369,28 @@ module YamImplementation =
         if isNull l then r
         elif isNull r then l
         else
-            let lc = count l
-            let rc = count r
+            let lc = l.Height
+            let rc = r.Height
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
             if lc > rc then
-                let struct(k, v, l) = unsafeRemoveMax l
-                unsafeBinary l k v r
+                let ln = unsafeRemoveMax &k &v l
+                unsafeBinary ln k v r
             else
-                let struct(k, v, r) = unsafeRemoveMin r
-                unsafeBinary l k v r
+                let rn = unsafeRemoveMin &k &v r
+                unsafeBinary l k v rn
                 
     let rec binary (l : Node<'Key, 'Value>) (k : 'Key) (v : 'Value) (r : Node<'Key, 'Value>) =
-    
-        let mutable lh = 0uy
-        let mutable rh = 0uy
-        let lc = Inner.GetCnt(l, &lh)
-        let rc = Inner.GetCnt(r, &rh)
+        #if COUNT
+        let lc = Inner.GetCount l
+        let rc = Inner.GetCount r
+        let lh = if lc > 0 then l.Height else 0uy
+        let rh = if rc > 0 then r.Height else 0uy
+        #else
+        let lh = height l
+        let rh = height r
+        #endif
+
         let b = int rh - int lh
         if b > 2 then
             // rh > lh + 2
@@ -367,20 +429,26 @@ module YamImplementation =
                     (binary lr.Right k v r)
 
         elif lh = 0uy && rh = 0uy then Node(k, v)
+        #if COUNT
         else Inner(l, k, v, r, 1uy + max lh rh, 1 + lc + rc) :> Node<_,_>
+        #else
+        else Inner(l, k, v, r, 1uy + max lh rh) :> Node<_,_>
+        #endif
         
     let rec join (l : Node<'Key, 'Value>) (r : Node<'Key, 'Value>) : Node<'Key, 'Value> =
         if isNull l then r
         elif isNull r then l
         else
-            let lc = count l
-            let rc = count r
-            if lc > rc then
-                let struct(k, v, l) = unsafeRemoveMax l
-                binary l k v r
+            let lh = l.Height
+            let rh = r.Height
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            if lh > rh then
+                let ln = unsafeRemoveMax &k &v l
+                binary ln k v r
             else
-                let struct(k, v, r) = unsafeRemoveMin r
-                binary l k v r
+                let rn = unsafeRemoveMin &k &v r
+                binary l k v rn
 
     let rec find (cmp : IComparer<'Key>) (key : 'Key) (node : Node<'Key, 'Value>) =
         if isNull node then
@@ -491,6 +559,35 @@ module YamImplementation =
             elif c < 0 then containsKey cmp key node.Left
             else true
 
+    let rec addIfNotPresent (cmp : IComparer<'Key>) (key : 'Key) (value : 'Value) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            // empty
+            Node(key, value)
+
+        elif node.Height = 1uy then
+            // leaf
+            let c = cmp.Compare(key, node.Key)
+            #if COUNT
+            if c > 0 then Inner(node, key, value, null, 2uy, 2) :> Node<_,_>
+            elif c < 0 then Inner(null, key, value, node, 2uy, 2) :> Node<_,_>
+            else node
+            #else
+            if c > 0 then Inner(node, key, value, null, 2uy) :> Node<_,_>
+            elif c < 0 then Inner(null, key, value, node, 2uy) :> Node<_,_>
+            else node
+            #endif
+
+        else
+            // inner
+            let n = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(key, n.Key)
+            if c > 0 then
+                unsafeBinary n.Left n.Key n.Value (addIfNotPresent cmp key value n.Right)
+            elif c < 0 then
+                unsafeBinary (addIfNotPresent cmp key value n.Left) n.Key n.Value n.Right
+            else    
+                node
+
     let rec add (cmp : IComparer<'Key>) (key : 'Key) (value : 'Value) (node : Node<'Key, 'Value>) =
         if isNull node then
             // empty
@@ -499,9 +596,15 @@ module YamImplementation =
         elif node.Height = 1uy then
             // leaf
             let c = cmp.Compare(key, node.Key)
+            #if COUNT
             if c > 0 then Inner(node, key, value, null, 2uy, 2) :> Node<_,_>
             elif c < 0 then Inner(null, key, value, node, 2uy, 2) :> Node<_,_>
             else Node(key, value)
+            #else
+            if c > 0 then Inner(node, key, value, null, 2uy) :> Node<_,_>
+            elif c < 0 then Inner(null, key, value, node, 2uy) :> Node<_,_>
+            else Node(key, value)
+            #endif
 
         else
             // inner
@@ -511,8 +614,13 @@ module YamImplementation =
                 unsafeBinary n.Left n.Key n.Value (add cmp key value n.Right)
             elif c < 0 then
                 unsafeBinary (add cmp key value n.Left) n.Key n.Value n.Right
-            else
+            else    
+                #if COUNT
                 Inner(n.Left, key, value, n.Right, n.Height, n.Count) :> Node<_,_>
+                #else
+                Inner(n.Left, key, value, n.Right, n.Height) :> Node<_,_>
+                #endif
+          
           
     let rec addInPlace (cmp : IComparer<'Key>) (key : 'Key) (value : 'Value) (node : Node<'Key, 'Value>) =
         if isNull node then
@@ -522,12 +630,21 @@ module YamImplementation =
         elif node.Height = 1uy then
             // leaf
             let c = cmp.Compare(key, node.Key)
+            #if COUNT 
             if c > 0 then Inner(node, key, value, null, 2uy, 2) :> Node<_,_>
             elif c < 0 then Inner(null, key, value, node, 2uy, 2) :> Node<_,_>
             else 
                 node.Key <- key
                 node.Value <- value
                 node
+            #else
+            if c > 0 then Inner(node, key, value, null, 2uy) :> Node<_,_>
+            elif c < 0 then Inner(null, key, value, node, 2uy) :> Node<_,_>
+            else 
+                node.Key <- key
+                node.Value <- value
+                node
+            #endif
 
         else
             // inner
@@ -574,12 +691,20 @@ module YamImplementation =
                 match update ValueNone with
                 | ValueNone -> node
                 | ValueSome n ->
+                    #if COUNT
                     Inner(node, key, n, null, 2uy, 2) :> Node<_,_>
+                    #else
+                    Inner(node, key, n, null, 2uy) :> Node<_,_>
+                    #endif
             elif c < 0 then
                 match update ValueNone with
                 | ValueNone -> node
                 | ValueSome n ->
+                    #if COUNT
                     Inner(null, key, n, node, 2uy, 2) :> Node<_,_>
+                    #else
+                    Inner(null, key, n, node, 2uy) :> Node<_,_>
+                    #endif
             else
                 match update (ValueSome node.Value) with
                 | ValueNone -> null
@@ -594,7 +719,11 @@ module YamImplementation =
             else
                 match update (ValueSome node.Value) with
                 | ValueSome n ->
+                    #if COUNT
                     Inner(node.Left, key, n, node.Right, node.Height, node.Count) :> Node<_,_>
+                    #else
+                    Inner(node.Left, key, n, node.Right, node.Height) :> Node<_,_>
+                    #endif
                 | ValueNone ->
                     unsafeJoin node.Left node.Right
 
@@ -610,12 +739,20 @@ module YamImplementation =
                 match update None with
                 | None -> node
                 | Some n ->
+                    #if COUNT
                     Inner(node, key, n, null, 2uy, 2) :> Node<_,_>
+                    #else
+                    Inner(node, key, n, null, 2uy) :> Node<_,_>
+                    #endif
             elif c < 0 then
                 match update None with
                 | None -> node
                 | Some n ->
+                    #if COUNT
                     Inner(null, key, n, node, 2uy, 2) :> Node<_,_>
+                    #else
+                    Inner(null, key, n, node, 2uy) :> Node<_,_>
+                    #endif
             else
                 match update (Some node.Value) with
                 | None -> null
@@ -630,7 +767,11 @@ module YamImplementation =
             else
                 match update (Some node.Value) with
                 | Some n ->
+                    #if COUNT
                     Inner(node.Left, key, n, node.Right, node.Height, node.Count) :> Node<_,_>
+                    #else
+                    Inner(node.Left, key, n, node.Right, node.Height) :> Node<_,_>
+                    #endif
                 | None ->
                     unsafeJoin node.Left node.Right
 
@@ -685,6 +826,72 @@ module YamImplementation =
             iter action node.Left
             action.Invoke(node.Key, node.Value)
             iter action node.Right
+
+    let rec map (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T>) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            null
+        elif node.Height = 1uy then
+            Node(node.Key, mapping.Invoke(node.Key, node.Value))
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let l = map mapping node.Left
+            let s = mapping.Invoke(node.Key, node.Value)
+            let r = map mapping node.Right
+            #if COUNT
+            Inner(l, node.Key, s, r, node.Height, node.Count) :> Node<_,_>
+            #else
+            Inner(l, node.Key, s, r, node.Height) :> Node<_,_>
+            #endif
+            
+    let rec chooseV (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            null
+        elif node.Height = 1uy then
+            match mapping.Invoke(node.Key, node.Value) with
+            | ValueSome v -> Node(node.Key, v)
+            | ValueNone -> null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let l = chooseV mapping node.Left
+            let s = mapping.Invoke(node.Key, node.Value)
+            let r = chooseV mapping node.Right
+            match s with
+            | ValueSome s -> binary l node.Key s r
+            | ValueNone -> join l r
+
+    let rec choose (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, option<'T>>) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            null
+        elif node.Height = 1uy then
+            match mapping.Invoke(node.Key, node.Value) with
+            | Some v -> Node(node.Key, v)
+            | None -> null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let l = choose mapping node.Left
+            let s = mapping.Invoke(node.Key, node.Value)
+            let r = choose mapping node.Right
+            match s with
+            | Some s -> binary l node.Key s r
+            | None -> join l r
+
+    let rec filter (predicate : OptimizedClosures.FSharpFunc<'Key, 'Value, bool>) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            null
+        elif node.Height = 1uy then
+            if predicate.Invoke(node.Key, node.Value) then
+                node
+            else
+                null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let l = filter predicate node.Left
+            let s = predicate.Invoke(node.Key, node.Value)
+            let r = filter predicate node.Right
+            if s then binary l node.Key node.Value r
+            else join l r
+
+
 
     let rec fold (state : 'State) (folder : OptimizedClosures.FSharpFunc<'State, 'Key, 'Value, 'State>) (node : Node<'Key, 'Value>) =
         if isNull node then
@@ -747,6 +954,345 @@ module YamImplementation =
                 struct( binary lt node.Key node.Value rt,  join lf rf )
             else
                 struct( join lt rt, binary lf node.Key node.Value rf )
+
+
+    let rec splitV (cmp : IComparer<'Key>) (key : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            struct(null, ValueNone, null)
+        elif node.Height = 1uy then
+            let c = cmp.Compare(key, node.Key)
+            if c > 0 then
+                struct(node, ValueNone, null)
+            elif c < 0 then
+                struct(null, ValueNone, node)
+            else
+                struct(null, ValueSome node.Value, null)
+        else
+            let node = node :?> Inner<'Key,'Value>
+            let c = cmp.Compare(key, node.Key)
+            if c > 0 then
+                let struct(rl, v, rr) = splitV cmp key node.Right
+                struct(binary node.Left node.Key node.Value rl, v, rr)
+            elif c < 0 then
+                let struct(ll, v, lr) = splitV cmp key node.Left
+                struct(ll, v, binary lr node.Key node.Value node.Right)
+            else
+                struct(node.Left, ValueSome node.Value, node.Right)
+                
+    let rec unionWith (cmp : IComparer<'Key>) (resolve : OptimizedClosures.FSharpFunc<'Key, 'Value, 'Value, 'Value>) (l : Node<'Key, 'Value>) (r : Node<'Key, 'Value>) =
+        if isNull l then r
+        elif isNull r then l
+
+        elif l.Height = 1uy then
+            // left leaf
+            r |> changeV cmp l.Key (function
+                | ValueSome rv -> ValueSome (resolve.Invoke(l.Key, l.Value, rv))
+                | ValueNone -> ValueSome l.Value
+            )
+        elif r.Height = 1uy then
+            // right leaf
+            l |> changeV cmp r.Key (function
+                | ValueSome lv -> ValueSome (resolve.Invoke(r.Key, lv, r.Value))
+                | ValueNone -> ValueSome r.Value
+            )
+
+        else
+            // both inner
+            let l = l :?> Inner<'Key, 'Value>
+            let r = r :?> Inner<'Key, 'Value>
+
+            if l.Height < r.Height then
+                let key = r.Key
+                let struct(ll, lv, lr) = splitV cmp key l
+
+                let newLeft = unionWith cmp resolve ll r.Left
+
+                let value =
+                    match lv with
+                    | ValueSome lv -> resolve.Invoke(key, lv, r.Value)
+                    | ValueNone -> r.Value
+                let newRight = unionWith cmp resolve lr r.Right
+
+                binary newLeft key value newRight
+            else
+                let key = l.Key
+                let struct(rl, rv, rr) = splitV cmp key r
+
+                let newLeft = unionWith cmp resolve l.Left rl
+
+                let value =
+                    match rv with
+                    | ValueSome rv -> resolve.Invoke(key, l.Value, rv)
+                    | ValueNone -> l.Value
+
+                let newRight = unionWith cmp resolve l.Right rr
+                
+                binary newLeft key value newRight
+      
+    let rec union (cmp : IComparer<'Key>) (map1 : Node<'Key, 'Value>) (map2 : Node<'Key, 'Value>) =
+        if System.Object.ReferenceEquals(map1, map2) then map1
+
+        elif isNull map1 then map2
+        elif isNull map2 then map1
+
+        elif map1.Height = 1uy then
+            // map1 leaf
+            map2 |> addIfNotPresent cmp map1.Key map1.Value
+        elif map2.Height = 1uy then
+            // map2 leaf
+            map1 |> add cmp map2.Key map2.Value
+
+        else
+            // both inner
+            let map1 = map1 :?> Inner<'Key, 'Value>
+            let map2 = map2 :?> Inner<'Key, 'Value>
+
+            if map1.Height < map2.Height then
+                let key = map2.Key
+                let struct(l1, v1, r1) = splitV cmp key map1
+                let newLeft = union cmp l1 map2.Left
+                let value = map2.Value
+                let newRight = union cmp r1 map2.Right
+
+                binary newLeft key value newRight
+            else
+                let key = map1.Key
+                let struct(l2, v2, r2) = splitV cmp key map2
+                let newLeft = union cmp map1.Left l2
+                let value =
+                    match v2 with
+                    | ValueSome rv -> rv
+                    | ValueNone -> map1.Value
+                let newRight = union cmp map1.Right r2
+                binary newLeft key value newRight
+
+    let rec withMin (cmp : IComparer<'Key>) (minKey : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            node
+        elif node.Height = 1uy then
+            let c = cmp.Compare(node.Key, minKey)
+            if c >= 0 then node
+            else null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(node.Key, minKey)
+            if c > 0 then
+                binary (withMin cmp minKey node.Left) node.Key node.Value node.Right
+            elif c < 0 then
+                withMin cmp minKey node.Right
+            else
+                withMin cmp minKey node.Right |> add cmp node.Key node.Value
+                
+    let rec withMax (cmp : IComparer<'Key>) (maxKey : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            node
+        elif node.Height = 1uy then
+            let c = cmp.Compare(node.Key, maxKey)
+            if c <= 0 then node
+            else null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(node.Key, maxKey)
+
+            if c > 0 then
+                withMax cmp maxKey node.Left
+            elif c < 0 then
+                binary node.Left node.Key node.Value (withMax cmp maxKey node.Right)
+            else
+                withMax cmp maxKey node.Left |> add cmp node.Key node.Value
+
+           
+    let rec withMinExclusive (cmp : IComparer<'Key>) (minKey : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            node
+        elif node.Height = 1uy then
+            let c = cmp.Compare(node.Key, minKey)
+            if c > 0 then node
+            else null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(node.Key, minKey)
+            if c > 0 then
+                binary (withMinExclusive cmp minKey node.Left) node.Key node.Value node.Right
+            else
+                withMinExclusive cmp minKey node.Right
+                              
+    let rec withMaxExclusive (cmp : IComparer<'Key>) (maxKey : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            node
+        elif node.Height = 1uy then
+            let c = cmp.Compare(node.Key, maxKey)
+            if c < 0 then node
+            else null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(node.Key, maxKey)
+
+            if c >= 0 then
+                withMaxExclusive cmp maxKey node.Left
+            else
+                binary node.Left node.Key node.Value (withMaxExclusive cmp maxKey node.Right)
+
+
+    let rec slice (cmp : IComparer<'Key>) (minKey : 'Key) (maxKey : 'Key) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            node
+        elif node.Height = 1uy then
+            let cMin = cmp.Compare(minKey, node.Key)
+            if cMin <= 0 then
+                let cMax = cmp.Compare(maxKey, node.Key)
+                if cMax >= 0 then
+                    node
+                else
+                    null
+            else
+                null
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let cMin = cmp.Compare(minKey, node.Key)
+            let cMax = cmp.Compare(maxKey, node.Key)
+
+            if cMin <= 0 && cMax >= 0 then
+                // split-key contained
+                binary (withMin cmp minKey node.Left) node.Key node.Value (withMax cmp maxKey node.Right)
+            elif cMin > 0 then  
+                // min larger than split-key
+                slice cmp minKey maxKey node.Right
+            else (* cMax < 0 *)
+                // max smaller than split-key
+                slice cmp minKey maxKey node.Left
+
+
+    let rec replaceRange 
+        (cmp : IComparer<'Key>) 
+        (min : 'Key) (max : 'Key) 
+        (l : voption<struct('Key * 'Value)>)
+        (r : voption<struct('Key * 'Value)>)
+        (replacement : voption<struct('Key * 'Value)> -> voption<struct('Key * 'Value)> -> struct(voption<'Value> * voption<'Value>))
+        (node : Node<'Key, 'Value>) =
+        
+        if isNull node then
+            null
+        elif node.Height = 1uy then
+            let cMin = cmp.Compare(node.Key, min)
+            let cMax = cmp.Compare(node.Key, max)
+            if cMin >= 0 && cMax <= 0 then
+                let struct(a, b) = replacement l r
+
+                match a with
+                | ValueSome va ->
+                    match b with
+                    | ValueSome vb ->
+                        #if COUNT
+                        Inner(null, min, va, Node(max, vb), 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(null, min, va, Node(max, vb), 2uy) :> Node<_,_>
+                        #endif
+
+                    | ValueNone ->
+                        Node(min, va)
+                | ValueNone ->
+                    match b with
+                    | ValueSome vb ->
+                        Node(max, vb)
+                    | ValueNone ->
+                        null
+            elif cMin < 0 then
+                // node is left
+                let struct(a, b) = replacement (ValueSome struct(node.Key, node.Value)) r
+                
+                match a with
+                | ValueSome va ->
+                    match b with
+                    | ValueSome vb ->
+                        #if COUNT
+                        Inner(node, min, va, Node(max, vb), 2uy, 3) :> Node<_,_>
+                        #else
+                        Inner(node, min, va, Node(max, vb), 2uy) :> Node<_,_>
+                        #endif
+                    | ValueNone ->
+                        #if COUNT
+                        Inner(node, min, va, null, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(node, min, va, null, 2uy) :> Node<_,_>
+                        #endif
+                | ValueNone ->
+                    match b with
+                    | ValueSome vb ->
+                        #if COUNT
+                        Inner(node, max, vb, null, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(node, max, vb, null, 2uy) :> Node<_,_>
+                        #endif
+                    | ValueNone ->
+                        node
+            else
+                // node is right
+                let struct(a, b) = replacement l (ValueSome struct(node.Key, node.Value))
+                
+                match a with
+                | ValueSome va ->
+                    match b with
+                    | ValueSome vb ->
+                        #if COUNT
+                        Inner(Node(min, va), max, vb, node, 2uy, 3) :> Node<_,_>
+                        #else
+                        Inner(Node(min, va), max, vb, node, 2uy) :> Node<_,_>
+                        #endif
+                    | ValueNone ->
+                        #if COUNT
+                        Inner(null, min, va, node, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(null, min, va, node, 2uy) :> Node<_,_>
+                        #endif
+                | ValueNone ->
+                    match b with
+                    | ValueSome vb ->
+                        #if COUNT
+                        Inner(null, max, vb, node, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(null, max, vb, node, 2uy) :> Node<_,_>
+                        #endif
+                    | ValueNone ->
+                        node
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let cMin = cmp.Compare(node.Key, min)
+            let cMax = cmp.Compare(node.Key, max)
+            if cMin >= 0 && cMax <= 0 then
+                let l = withMaxExclusive cmp min node.Left
+                let r = withMinExclusive cmp max node.Right
+
+                let ln = tryMaxV l
+                let rn = tryMinV r
+                let struct(a, b) = replacement ln rn
+
+                match a with
+                | ValueSome va ->
+                    match b with
+                    | ValueSome vb ->
+                        if height l < height r then
+                            binary (add cmp min va l) max vb r
+                        else
+                            binary l min va (add cmp max vb r)
+                    | ValueNone ->
+                        binary l min va r
+                | ValueNone ->
+                    match b with
+                    | ValueSome vb ->
+                        binary l max vb r
+                    | ValueNone ->
+                        join l r
+
+            elif cMin < 0 then
+                // only left
+                let l1 = replaceRange cmp min max l (ValueSome struct(node.Key, node.Value)) replacement node.Left
+                binary l1 node.Key node.Value node.Right
+            else    
+                // only right
+                let r1 = replaceRange cmp min max (ValueSome struct(node.Key, node.Value)) r replacement node.Right
+                binary node.Left node.Key node.Value r1
+
 
 
     type YamMappingEnumerator<'Key, 'Value, 'T> =
@@ -835,10 +1381,11 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
 
 
     static let defaultComparer = LanguagePrimitives.FastGenericComparer<'Key>
+    static let empty = Yam<'Key, 'Value>(defaultComparer, null)
 
     member internal x.Root = root
 
-    static member Empty = Yam<'Key, 'Value>(defaultComparer, null)
+    static member Empty = empty
         
     static member FromSeq(elements : #seq<'Key * 'Value>) =
         let cmp = defaultComparer
@@ -931,28 +1478,36 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
         if isNull root then 
             None
         else 
-            let struct(k, v, rest) = YamImplementation.unsafeRemoveMin root
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let rest = YamImplementation.unsafeRemoveMin &k &v root
             Some (k,v,Yam(comparer, rest))
             
     member x.TryRemoveMax() =
         if isNull root then 
             None
         else 
-            let struct(k, v, rest) = YamImplementation.unsafeRemoveMax root
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let rest = YamImplementation.unsafeRemoveMax &k &v root
             Some (k,v,Yam(comparer, rest))
             
     member x.TryRemoveMinV() =
         if isNull root then 
             ValueNone
         else 
-            let struct(k, v, rest) = YamImplementation.unsafeRemoveMin root
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let rest = YamImplementation.unsafeRemoveMin &k &v root
             ValueSome struct(k,v,Yam(comparer, rest))
             
     member x.TryRemoveMaxV() =
         if isNull root then 
             ValueNone
         else 
-            let struct(k, v, rest) = YamImplementation.unsafeRemoveMax root
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let rest = YamImplementation.unsafeRemoveMax &k &v root
             ValueSome struct(k,v,Yam(comparer, rest))
 
     member x.ToSeq() =
@@ -989,6 +1544,22 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
         let folder = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt(folder)
         YamImplementation.foldBack state folder root
 
+    member x.Map(mapping : 'Key -> 'Value -> 'T) =
+        let mapping = OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping
+        Yam(comparer, YamImplementation.map mapping root)
+
+    member x.ChooseV(mapping : 'Key -> 'Value -> voption<'T>) =
+        let mapping = OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping
+        Yam(comparer, YamImplementation.chooseV mapping root)
+
+    member x.Choose(mapping : 'Key -> 'Value -> option<'T>) =
+        let mapping = OptimizedClosures.FSharpFunc<_,_,_>.Adapt mapping
+        Yam(comparer, YamImplementation.choose mapping root)
+
+    member x.Filter(predicate : 'Key -> 'Value -> bool) =
+        let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
+        Yam(comparer, YamImplementation.filter predicate root)
+
     member x.Exists(predicate : 'Key -> 'Value -> bool) =
         let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
         YamImplementation.exists predicate root
@@ -1001,6 +1572,32 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
         let predicate = OptimizedClosures.FSharpFunc<_,_,_>.Adapt predicate
         let struct(f, t) = YamImplementation.partition predicate root
         Yam(comparer, f), Yam(comparer, t)
+
+    member x.WithMin(min : 'Key) = Yam(comparer, YamImplementation.withMin comparer min root)
+    member x.WithMax(max : 'Key) = Yam(comparer, YamImplementation.withMax comparer max root)
+    member x.Slice(min : 'Key, max : 'Key) = Yam(comparer, YamImplementation.slice comparer min max root)
+
+    member x.GetSlice(min : option<'Key>, max : option<'Key>) =
+        match min with
+        | Some min ->
+            match max with
+            | Some max -> x.Slice(min, max)
+            | None -> x.WithMin min
+        | None ->
+            match max with
+            | Some max -> x.WithMax max
+            | None -> x
+
+    static member Union(l : Yam<'Key, 'Value>, r : Yam<'Key, 'Value>) =
+        let cmp = defaultComparer
+        Yam(cmp, YamImplementation.union cmp l.Root r.Root)
+        
+    static member UnionWith(l : Yam<'Key, 'Value>, r : Yam<'Key, 'Value>, resolve : 'Key -> 'Value -> 'Value -> 'Value) =
+        let cmp = defaultComparer
+        let resolve = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt resolve
+        Yam(cmp, YamImplementation.unionWith cmp resolve l.Root r.Root)
+
+
 
     member x.GetEnumerator() = new YamEnumerator<_,_>(root)
 
@@ -1117,9 +1714,18 @@ module Yam =
     let inline iter (action : 'Key -> 'Value -> unit) (map : Yam<'Key, 'Value>) = map.Iter action
     let inline fold (folder : 'State -> 'Key -> 'Value -> 'State) (state : 'State) (map : Yam<'Key, 'Value>) = map.Fold(state, folder)
     let inline foldBack (folder : 'Key -> 'Value -> 'State -> 'State) (map : Yam<'Key, 'Value>) (state : 'State) =  map.FoldBack(state, folder)
+    
+    let inline map (mapping : 'Key -> 'Value -> 'T) (map : Yam<'Key, 'Value>) = map.Map mapping
+    let inline choose (mapping : 'Key -> 'Value -> option<'T>) (map : Yam<'Key, 'Value>) = map.Choose mapping
+    let inline chooseV (mapping : 'Key -> 'Value -> voption<'T>) (map : Yam<'Key, 'Value>) = map.ChooseV mapping
+    let inline filter (predicate : 'Key -> 'Value -> bool) (map : Yam<'Key, 'Value>) = map.Filter predicate
+    
     let inline exists (predicate : 'Key -> 'Value -> bool) (map : Yam<'Key, 'Value>) = map.Exists predicate
     let inline forall (predicate : 'Key -> 'Value -> bool) (map : Yam<'Key, 'Value>) = map.ForAll predicate
     let inline partition (predicate : 'Key -> 'Value -> bool) (map : Yam<'Key, 'Value>) = map.Partition predicate
+
+    let inline slice (min : 'Key) (max : 'Key) (map : Yam<'Key, 'Value>) = map.Slice(min, max)
+
 
     let inline ofSeq (elements : seq<'Key * 'Value>) = Yam.FromSeq elements
     let inline ofSeqV (elements : seq<struct('Key * 'Value)>) = Yam.FromSeqV elements
@@ -1134,5 +1740,7 @@ module Yam =
     let inline toListV (map : Yam<'Key, 'Value>) = map.ToListV()
     let inline toArray (map : Yam<'Key, 'Value>) = map.ToArray()
     let inline toArrayV (map : Yam<'Key, 'Value>) = map.ToArrayV()
-
-
+    
+    let inline union (l : Yam<'Key, 'Value>) (r : Yam<'Key, 'Value>) = Yam.Union(l, r)
+    let inline unionMany (maps : #seq<Yam<'Key, 'Value>>) = (empty, maps) ||> Seq.fold union
+    let inline unionWith (resolve : 'Key -> 'Value -> 'Value -> 'Value) (l : Yam<'Key, 'Value>) (r : Yam<'Key, 'Value>) = Yam.UnionWith(l, r, resolve)
