@@ -151,6 +151,52 @@ module Map =
             | ValueNone -> ()
             res
 
+    let computeDelta 
+        (add : 'K -> 'V -> 'OP)
+        (update : 'K -> 'V -> 'V -> voption<'OP>)
+        (remove : 'K -> 'V -> 'OP)
+        (l : Map<'K, 'V>)
+        (r : Map<'K, 'V>) =
+
+        let mutable res = Map.empty
+        let mutable l = l
+        for KeyValue(k, rv) in r do
+            match Map.tryFind k l with
+            | Some lv ->
+                l <- Map.remove k l
+                match update k lv rv with
+                | ValueSome op ->
+                    res <- Map.add k op res
+                | ValueNone ->
+                    ()
+            | None ->
+                res <- Map.add k (add k rv) res
+        for KeyValue(k, lv) in l do
+            res <- Map.add k (remove k lv) res
+
+        res
+
+    let applyDelta 
+        (apply : 'K -> voption<'V> -> 'OP -> voption<'V>)
+        (state : Map<'K, 'V>)
+        (delta : Map<'K, 'OP>) =
+            
+        let mutable s = state
+        for KeyValue(k, d) in delta do
+            match Map.tryFind k s with
+            | Some v ->
+                match apply k (ValueSome v) d with
+                | ValueSome r -> s <- Map.add k r s
+                | ValueNone -> s <- Map.remove k s
+            | None ->
+                match apply k ValueNone d with
+                | ValueSome r -> s <- Map.add k r s
+                | ValueNone -> ()
+        s
+
+
+
+
 module MapNew =
 
     let ofListRandomOrder (rand : System.Random) (l : list<'K * 'V>) =
@@ -479,6 +525,8 @@ let tests =
             identical (MapNew.unionWith resolve na nb) (Map.unionWith resolve a b)
         )
 
+        
+
 
         testProperty "tryAt" (fun (m : Map<int, int>) ->
             let mn = MapNew.ofSeq (Map.toSeq m)
@@ -760,20 +808,20 @@ let yamTests =
         //)
         
     
-        //testProperty "replaceRange" (fun (m : Map<int, int>) (l : int) (h : int) ->
-        //    let mn = Yam.ofSeq (Map.toSeq m)
-        //    identical mn m
+        testProperty "replaceRange" (fun (m : Map<int, int>) (l : int) (h : int) ->
+            let mn = Yam.ofSeq (Map.toSeq m)
+            identical mn m
 
-        //    let replacement (l : voption<struct(int * int)>) (r : voption<struct(int * int)>) =
-        //        struct(ValueSome (Unchecked.hash l), ValueSome (Unchecked.hash r))
+            let replacement (l : voption<struct(int * int)>) (r : voption<struct(int * int)>) =
+                struct(ValueSome (Unchecked.hash l), ValueSome (Unchecked.hash r))
 
-        //    let l, h = if l < h then l, h else h, l
-        //    let a = m |> Map.replaceRange l h replacement
-        //    let b = mn |> Yam.replaceRange l h replacement
+            let l, h = if l < h then l, h else h, l
+            let a = m |> Map.replaceRange l h replacement
+            let b = mn |> Yam.replaceRangeV l h replacement
 
-        //    identical b a
+            identical b a
 
-        //)
+        )
         //testProperty "neighboursAt" (fun (m : Map<int, int>) ->
         //    let mn = Yam.ofSeq (Map.toSeq m)
         //    identical mn m
@@ -937,6 +985,38 @@ let yamTests =
             identical (Yam.unionWith resolve na nb) (Map.unionWith resolve a b)
         )
 
+        testProperty "computeDelta" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = Yam.ofArray (Map.toArray a)
+            let nb = Yam.ofArray (Map.toArray b)
+            
+            let add k v = (k, v, true)
+            let rem k v = (k, v, false)
+            let update k v1 v2 =
+                if v1 = v2 then ValueNone
+                else ValueSome (k, v2, true)
+
+            let r = Map.computeDelta add update rem a b
+            let t = Yam.computeDelta add update rem na nb
+
+            identical t r
+        )
+
+        
+        testProperty "applyDelta" (fun (a : Map<int, int>) (b : Map<int, int>) ->
+            let na = Yam.ofArray (Map.toArray a)
+            let nb = Yam.ofArray (Map.toArray b)
+            
+            let apply k v op =
+                let v = match v with | ValueNone -> 0 | ValueSome v -> v
+                let r = v + op
+                if r % 2 = 0 then ValueSome r
+                else ValueNone
+
+            let r = Map.applyDelta apply a b
+            let t = Yam.applyDelta apply na nb
+
+            identical t r
+        )
 
         //testProperty "tryAt" (fun (m : Map<int, int>) ->
         //    let mn = Yam.ofSeq (Map.toSeq m)

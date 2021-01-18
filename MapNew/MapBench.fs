@@ -49,6 +49,7 @@ type MapBenchmark() =
     let mutable map = Map.ofArray data
     let mutable mapNew = MapNew.ofArray data
     let mutable yam = Yam.ofArray data
+    let mutable yam2 = Yam.ofArray data
     let mutable existing = Unchecked.defaultof<_> //LanguagePrimitives.GenericZero
     let mutable toolarge = Unchecked.defaultof<_> //LanguagePrimitives.GenericZero
     let mutable randomElements  : (_ * _)[] = [||]
@@ -80,11 +81,57 @@ type MapBenchmark() =
     [<MethodImpl(MethodImplOptions.NoInlining)>]
     static let keep (v : 'a) =
         ()
+        
+    static let computeDeltaNaive 
+        (add : 'K -> 'V -> 'OP)
+        (update : 'K -> 'V -> 'V -> voption<'OP>)
+        (remove : 'K -> 'V -> 'OP)
+        (l : Yam<'K, 'V>)
+        (r : Yam<'K, 'V>) =
+
+        let mutable res = Yam.empty
+        let mutable l = l
+        let mutable lv = Unchecked.defaultof<_>
+        for KeyValue(k, rv) in r do
+            if l.TryRemove(k, &l, &lv) then
+                match update k lv rv with
+                | ValueSome op ->
+                    res <- Yam.add k op res
+                | ValueNone ->
+                    ()
+            else
+                res <- Yam.add k (add k rv) res
+        for KeyValue(k, lv) in l do
+            res <- Yam.add k (remove k lv) res
+
+        res
+
+
+    static let applyDeltaNaive
+        (apply : 'K -> voption<'V> -> 'OP -> voption<'V>)
+        (state : Yam<'K, 'V>)
+        (delta : Yam<'K, 'OP>) =
+            
+        let mutable s = state
+        for KeyValue(k, d) in delta do
+            match Yam.tryFind k s with
+            | Some v ->
+                match apply k (ValueSome v) d with
+                | ValueSome r -> s <- Yam.add k r s
+                | ValueNone -> s <- Yam.remove k s
+            | None ->
+                match apply k ValueNone d with
+                | ValueSome r -> s <- Yam.add k r s
+                | ValueNone -> ()
+        s
+
+
 
     [<GlobalSetup>]
     member x.Setup() =
+        let valueRange = x.Count * 4 //1 <<< 30
         // int -> int
-        let arr = randomArray (1 <<< 30) x.Count |> Array.mapi (fun i v -> v, i)
+        let arr = randomArray valueRange x.Count |> Array.mapi (fun i v -> v, 1+i)
 
         // decimal -> int
         //let arr = randomDecimalArray x.Count |> Array.mapi (fun i v -> v, i)
@@ -100,69 +147,136 @@ type MapBenchmark() =
         yam <- Yam.ofArray data
         existing <- data.[rand.Next(data.Length)] |> fst
 
-        let all = System.Collections.Generic.HashSet (data |> Array.map fst)
-        let arr = Array.zeroCreate x.Count
-        let mutable cnt = 0
-        while cnt < arr.Length do
-            let v = rand.Next()
-            if all.Add v then
-                arr.[cnt] <- (v, cnt)
-                cnt <- cnt + 1
-        randomElements <- arr
+
+
+        //let all = System.Collections.Generic.HashSet (data |> Array.map fst)
+        //let arr = Array.zeroCreate x.Count
+        //let mutable cnt = 0
+        //while cnt < arr.Length do
+        //    let v = rand.Next()
+        //    if all.Add v then
+        //        arr.[cnt] <- (v, cnt)
+        //        cnt <- cnt + 1
+        //randomElements <- arr
 
         let largest = arr |> Seq.map fst |> Seq.max
         toolarge <- LanguagePrimitives.GenericOne + largest //System.Decimal.MaxValue //System.Int32.MaxValue
+        
+        let arr2 = randomArray valueRange x.Count |> Array.mapi (fun i v -> v, 1+i)
+        yam2 <- Yam.ofArray arr2
+        randomElements <- arr2
+
+        let test = Yam.union yam yam2
+        printfn "overlap: %A" (2*x.Count - test.Count)
+
+
+
+    //[<Benchmark>]
+    //[<BenchmarkCategory("computeDelta")>]
+    //member x.``Yam_computeDelta``() =
+    //    (yam, yam2) ||> Yam.computeDelta 
+    //        (fun k v -> v) 
+    //        (fun k l r -> let v = r - l in if v <> 0 then ValueSome v else ValueNone) 
+    //        (fun k v -> -v)
+            
+    //[<Benchmark>]
+    //[<BenchmarkCategory("computeDelta")>]
+    //member x.``Yam_computeDeltaNaive``() =
+    //    (yam, yam2) ||> computeDeltaNaive
+    //        (fun k v -> v)
+    //        (fun k l r -> let v = r - l in if v <> 0 then ValueSome v else ValueNone)
+    //        (fun k v -> -v)
+    
+            
+    //[<Benchmark(Baseline = true)>]
+    //[<BenchmarkCategory("applyDelta")>]
+    //member x.``Yam_applyDeltaNaive``() =
+    //    (yam, yam2) ||> applyDeltaNaive (fun k v o ->
+    //        let cnt = 
+    //            match v with
+    //            | ValueSome v -> v + o
+    //            | ValueNone -> o
+    //        if cnt <> 0 then ValueSome cnt  
+    //        else ValueNone
+    //    )
 
     [<Benchmark>]
-    [<BenchmarkCategory("add")>]
+    member x.``Yam_applyDelta``() =
+        (yam, yam2) ||> Yam.applyDelta (fun k v o ->
+            let cnt = 
+                match v with
+                | ValueSome v -> v + o
+                | ValueNone -> o
+            if cnt <> 0 then ValueSome cnt  
+            else ValueNone
+        )
+        
+    [<Benchmark>]
+    member x.``Yam_unionWith``() =
+        (yam, yam2) ||> Yam.unionWith (fun _ a b -> a + b)
+            
+            
+    [<Benchmark>]
+    member x.``Yam_union``() =
+        (yam, yam2) ||> Yam.union
+            
+
+    //[<Benchmark>]
+    //member x.``Yam_chooseV``() =
+    //    yam |> Yam.chooseV (fun k v ->
+    //        if v % 2 <> 0 then ValueSome v
+    //        else ValueNone
+    //    )
+            
+    [<Benchmark>]
     member x.``Yam_add``() =
-        let r = yam
+        let mutable r = yam
         for (k, v) in randomElements do
-            r.Add(k, v) |> keep
+            r <- r.Add(k, v)
+        r
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("add")>]
+    //member x.``Map_add``() =
+    //    let r = map
+    //    for (k, v) in randomElements do
+    //        Map.add k v r |> keep
+
+    //[<Benchmark>]
+    //[<BenchmarkCategory("remove")>]
+    //member x.``Yam_remove``() =
+    //    let r = yam
+    //    for i in 0 .. min randomElements.Length data.Length - 1 do
+    //        let (k,_) = data.[i]
+    //        Yam.remove k r |> keep
         
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("add")>]
-    member x.``Map_add``() =
-        let r = map
-        for (k, v) in randomElements do
-            Map.add k v r |> keep
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("remove")>]
+    //member x.``Map_remove``() =
+    //    let r = map
+    //    for i in 0 .. min randomElements.Length data.Length - 1 do
+    //        let (k,_) = data.[i]
+    //        Map.remove k r |> keep
 
-    [<Benchmark>]
-    [<BenchmarkCategory("remove")>]
-    member x.``Yam_remove``() =
-        let r = yam
-        for i in 0 .. min randomElements.Length data.Length - 1 do
-            let (k,_) = data.[i]
-            Yam.remove k r |> keep
-        
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("remove")>]
-    member x.``Map_remove``() =
-        let r = map
-        for i in 0 .. min randomElements.Length data.Length - 1 do
-            let (k,_) = data.[i]
-            Map.remove k r |> keep
+    //[<Benchmark>]
+    //[<BenchmarkCategory("ofArray")>]
+    //member x.``Yam_ofArray``() =
+    //    Yam.ofArray data
 
-    [<Benchmark>]
-    [<BenchmarkCategory("ofArray")>]
-    member x.``Yam_ofArray``() =
-        Yam.ofArray data
-
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("ofArray")>]
-    member x.``Map_ofArray``() =
-        Map.ofArray data
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("ofArray")>]
+    //member x.``Map_ofArray``() =
+    //    Map.ofArray data
         
 
-    [<Benchmark>]
-    [<BenchmarkCategory("toArray")>]
-    member x.``Yam_toArray``() =
-        Yam.toArray yam
+    //[<Benchmark>]
+    //[<BenchmarkCategory("toArray")>]
+    //member x.``Yam_toArray``() =
+    //    Yam.toArray yam
 
-    [<Benchmark(Baseline = true)>]
-    [<BenchmarkCategory("toArray")>]
-    member x.``Map_toArray``() =
-        Map.toArray map
+    //[<Benchmark(Baseline = true)>]
+    //[<BenchmarkCategory("toArray")>]
+    //member x.``Map_toArray``() =
+    //    Map.toArray map
         
 
 //    [<Benchmark(Baseline=true)>]
@@ -197,31 +311,31 @@ type MapBenchmark() =
 //            sum <- sum + v
 //        sum
         
-    [<Benchmark>]
-    [<BenchmarkCategory("containsKey_all")>]
-    member x.``Yam_containsKey_all``() =
-        let mutable res = true
-        for (k, _) in data do
-            res <- yam.ContainsKey k && res
-        res
+    //[<Benchmark>]
+    //[<BenchmarkCategory("containsKey_all")>]
+    //member x.``Yam_containsKey_all``() =
+    //    let mutable res = true
+    //    for (k, _) in data do
+    //        res <- yam.ContainsKey k && res
+    //    res
 
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("containsKey_all")>]
-    member x.``Map_containsKey_all``() =
-        let mutable res = true
-        for (k, _) in data do
-            res <- Map.containsKey k map && res
-        res
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("containsKey_all")>]
+    //member x.``Map_containsKey_all``() =
+    //    let mutable res = true
+    //    for (k, _) in data do
+    //        res <- Map.containsKey k map && res
+    //    res
 
-    [<Benchmark>]
-    [<BenchmarkCategory("containsKey_nonexisting")>]
-    member x.``Yam_containsKey_nonexisting``() =
-        yam.ContainsKey toolarge
+    //[<Benchmark>]
+    //[<BenchmarkCategory("containsKey_nonexisting")>]
+    //member x.``Yam_containsKey_nonexisting``() =
+    //    yam.ContainsKey toolarge
        
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("containsKey_nonexisting")>]
-    member x.``Map_containsKey_nonexisting``() =
-        Map.containsKey toolarge map
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("containsKey_nonexisting")>]
+    //member x.``Map_containsKey_nonexisting``() =
+    //    Map.containsKey toolarge map
         
          
 //    [<Benchmark(Baseline=true)>]
@@ -260,15 +374,15 @@ type MapBenchmark() =
 //        for (k, _) in data do
 //            res <- MapNew.remove k res
 //        res
-    [<Benchmark>]
-    [<BenchmarkCategory("exists")>]
-    member x.``Yam_exists``() =
-        yam |> Yam.exists (fun _ _ -> false)
+    //[<Benchmark>]
+    //[<BenchmarkCategory("exists")>]
+    //member x.``Yam_exists``() =
+    //    yam |> Yam.exists (fun _ _ -> false)
         
-    [<Benchmark(Baseline=true)>]
-    [<BenchmarkCategory("exists")>]
-    member x.``Map_exists``() =
-        map |> Map.exists (fun _ _ -> false)
+    //[<Benchmark(Baseline=true)>]
+    //[<BenchmarkCategory("exists")>]
+    //member x.``Map_exists``() =
+    //    map |> Map.exists (fun _ _ -> false)
         
         
 //    [<Benchmark(Baseline=true)>]

@@ -274,12 +274,12 @@ let memory (creator : unit -> 'a) =
     let size = System.GC.GetTotalMemory(true) - before
     size + int64 (float (Unchecked.hash a % 2) - 0.5)
 
-open Temp.FSharp.Collections
+//open Temp.FSharp.Collections
 
 [<EntryPoint>]
 let main _argv =
     printfn "FSharp.Core: %A" typeof<list<int>>.Assembly.FullName
-    
+
     //for e in 1 .. 20 do
     //    let size = 1 <<< e
     //    let l = List.init size (fun i -> i, i)
