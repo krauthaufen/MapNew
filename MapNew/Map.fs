@@ -2187,7 +2187,7 @@ type MapNew< [<EqualityConditionalOn>] 'Key, [<EqualityConditionalOn;ComparisonC
             | :? MapLeaf<'Key, 'Value> as n ->
                 if index > 0 then struct(ValueSome struct(n.Key, n.Value), ValueNone, r)
                 elif index < 0 then struct(l, ValueNone, ValueSome struct(n.Key, n.Value))
-                else struct(l, ValueSome n.Value, r)
+                else struct(l, ValueSome struct(n.Key, n.Value), r)
 
             | :? MapInner<'Key, 'Value> as n ->
                 let i = index - n.Left.Count 
@@ -2202,7 +2202,7 @@ type MapNew< [<EqualityConditionalOn>] 'Key, [<EqualityConditionalOn;ComparisonC
                         if n.Right.Count <= 0 then r
                         else minKeyValue n.Right
                     
-                    struct(l, ValueSome n.Value, r)
+                    struct(l, ValueSome struct(n.Key, n.Value), r)
 
             | _ ->
                 struct(l, ValueNone, r)

@@ -210,30 +210,42 @@ type MapBenchmark() =
             if cnt <> 0 then ValueSome cnt  
             else ValueNone
         )
+
         
     [<Benchmark>]
-    member x.``Yam_unionWith``() =
-        (yam, yam2) ||> Yam.unionWith (fun _ a b -> a + b)
+    member x.``Yam_applyDeltaAndGetEffective``() =
+        (yam, yam2) ||> Yam.applyDeltaAndGetEffective (fun k v o ->
+            let cnt = 
+                match v with
+                | ValueSome v -> v + o
+                | ValueNone -> o
+            if cnt <> 0 then ValueSome cnt  
+            else ValueNone
+        )
+        
+    //[<Benchmark>]
+    //member x.``Yam_computeDelta``() =
+    //    (yam, yam2) ||> Yam.computeDelta 
+    //        (fun _ v -> v)
+    //        (fun _ a b -> let v = b - a in if v <> 0 then ValueSome v else ValueNone)
+    //        (fun _ v -> -v)
+        
+    //[<Benchmark>]
+    //member x.``Yam_unionWith``() =
+    //    (yam, yam2) ||> Yam.unionWith (fun _ a b -> a + b)
             
             
-    [<Benchmark>]
-    member x.``Yam_union``() =
-        (yam, yam2) ||> Yam.union
+    //[<Benchmark>]
+    //member x.``Yam_union``() =
+    //    (yam, yam2) ||> Yam.union
             
 
     //[<Benchmark>]
-    //member x.``Yam_chooseV``() =
-    //    yam |> Yam.chooseV (fun k v ->
-    //        if v % 2 <> 0 then ValueSome v
-    //        else ValueNone
-    //    )
-            
-    [<Benchmark>]
-    member x.``Yam_add``() =
-        let mutable r = yam
-        for (k, v) in randomElements do
-            r <- r.Add(k, v)
-        r
+    //member x.``Yam_add``() =
+    //    let mutable r = yam
+    //    for (k, v) in randomElements do
+    //        r <- r.Add(k, v)
+    //    r
     //[<Benchmark(Baseline=true)>]
     //[<BenchmarkCategory("add")>]
     //member x.``Map_add``() =

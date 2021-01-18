@@ -494,6 +494,28 @@ module YamImplementation =
             elif c < 0 then tryFind cmp key node.Left
             else Some node.Value
             
+    let rec tryGetItem (index : int) (key : byref<'Key>) (value : byref<'Value>) (node : Node<'Key, 'Value>) =
+        if isNull node then
+            false
+        elif node.Height = 1uy then
+            if index = 0 then 
+                key <- node.Key
+                value <- node.Value
+                true
+            else
+                false
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let id = index - count node.Left
+            if id > 0 then
+                tryGetItem (id - 1) &key &value node.Right
+            elif id < 0 then
+                tryGetItem index &key &value node.Left
+            else
+                key <- node.Key
+                value <- node.Value
+                true
+
     let rec tryGetMin (minKey : byref<'Key>) (minValue : byref<'Value>) (node : Node<'Key, 'Value>) =
         if isNull node then
             false
@@ -674,8 +696,7 @@ module YamImplementation =
             else 
                 result <- unsafeJoin node.Left node.Right
                 true
-         
-             
+       
     let rec tryRemove (cmp : IComparer<'Key>) (key : 'Key) (removedValue : byref<'Value>) (result : byref<Node<'Key, 'Value>>) (node : Node<'Key, 'Value>) =
         if isNull node then 
             false
@@ -707,6 +728,32 @@ module YamImplementation =
                 removedValue <- node.Value
                 true
      
+     
+    let rec removeAt (index : int) (removedKey : byref<'Key>) (removedValue : byref<'Value>) (node : Node<'Key, 'Value>) =
+        if isNull node then 
+            null
+        elif node.Height = 1uy then
+            if index = 0 then
+                removedKey <- node.Key
+                removedValue <- node.Value
+                null
+            else
+                node
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let id = index - count node.Left
+            if id > 0 then 
+                let result = removeAt (id - 1) &removedKey &removedValue node.Right
+                unsafeBinary node.Left node.Key node.Value result
+            elif id < 0 then 
+                let result = removeAt index &removedKey &removedValue node.Left
+                unsafeBinary result node.Key node.Value node.Right
+            else 
+                removedKey <- node.Key
+                removedValue <- node.Value
+                unsafeJoin node.Left node.Right
+     
+
     let rec changeV (cmp : IComparer<'Key>) (key : 'Key) (update : voption<'Value> -> voption<'Value>) (node : Node<'Key, 'Value>) =
         if isNull node then
             match update ValueNone with
@@ -802,6 +849,8 @@ module YamImplementation =
                     #endif
                 | None ->
                     unsafeJoin node.Left node.Right
+
+
 
     let rec copyToV (array : struct('Key * 'Value)[]) (index : int) (node : Node<'Key, 'Value>) =
         if isNull node then
@@ -1183,6 +1232,100 @@ module YamImplementation =
                 let value = if hasValue then v2 else map1.Value
                 let newRight = union cmp map1.Right r2
                 binary newLeft key value newRight
+
+    [<System.Flags>]
+    type NeighbourFlags =
+        | None = 0
+        | Left = 1
+        | Self = 2
+        | Right = 4
+
+    let rec getNeighbours 
+        (cmp : IComparer<'Key>) (key : 'Key) 
+        (flags : NeighbourFlags)
+        (leftKey : byref<'Key>) (leftValue : byref<'Value>)
+        (selfValue : byref<'Value>)
+        (rightKey : byref<'Key>) (rightValue : byref<'Value>)
+        (node : Node<'Key, 'Value>) =
+
+        if isNull node then
+            flags
+
+        elif node.Height = 1uy then
+            let c = cmp.Compare(key, node.Key)
+            if c > 0 then
+                leftKey <- node.Key
+                leftValue <- node.Value
+                flags ||| NeighbourFlags.Left
+            elif c < 0 then
+                rightKey <- node.Key
+                rightValue <- node.Value
+                flags ||| NeighbourFlags.Right
+            else
+                selfValue <- node.Value
+                flags ||| NeighbourFlags.Self
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let c = cmp.Compare(key, node.Key)
+            if c > 0 then
+                leftKey <- node.Key
+                leftValue <- node.Value
+                getNeighbours cmp key (flags ||| NeighbourFlags.Left) &leftKey &leftValue &selfValue &rightKey &rightValue node.Right
+            elif c < 0 then
+                rightKey <- node.Key
+                rightValue <- node.Value
+                getNeighbours cmp key (flags ||| NeighbourFlags.Right) &leftKey &leftValue &selfValue &rightKey &rightValue node.Left
+            else    
+                selfValue <- node.Value
+                let mutable flags = flags 
+                if tryGetMin &rightKey &rightValue node.Right then flags <- flags ||| NeighbourFlags.Right
+                if tryGetMax &leftKey &leftValue node.Left then flags <- flags ||| NeighbourFlags.Left
+                flags ||| NeighbourFlags.Self
+
+    let rec getNeighboursAt
+        (index : int) 
+        (flags : NeighbourFlags)
+        (leftKey : byref<'Key>) (leftValue : byref<'Value>)
+        (selfKey : byref<'Key>) (selfValue : byref<'Value>)
+        (rightKey : byref<'Key>) (rightValue : byref<'Value>)
+        (node : Node<'Key, 'Value>) =
+
+        if isNull node then
+            flags
+
+        elif node.Height = 1uy then
+            if index > 0 then
+                leftKey <- node.Key
+                leftValue <- node.Value
+                flags ||| NeighbourFlags.Left
+            elif index < 0 then
+                rightKey <- node.Key
+                rightValue <- node.Value
+                flags ||| NeighbourFlags.Right
+            else
+                selfKey <- node.Key
+                selfValue <- node.Value
+                flags ||| NeighbourFlags.Self
+        else
+            let node = node :?> Inner<'Key, 'Value>
+            let id = index - count node.Left
+            if id > 0 then
+                leftKey <- node.Key
+                leftValue <- node.Value
+                getNeighboursAt (id - 1) (flags ||| NeighbourFlags.Left) &leftKey &leftValue &selfKey &selfValue &rightKey &rightValue node.Right
+            elif id < 0 then
+                rightKey <- node.Key
+                rightValue <- node.Value
+                getNeighboursAt index (flags ||| NeighbourFlags.Right) &leftKey &leftValue &selfKey &selfValue &rightKey &rightValue node.Left
+            else    
+                selfKey <- node.Key
+                selfValue <- node.Value
+                let mutable flags = flags 
+                if tryGetMin &rightKey &rightValue node.Right then flags <- flags ||| NeighbourFlags.Right
+                if tryGetMax &leftKey &leftValue node.Left then flags <- flags ||| NeighbourFlags.Left
+                flags ||| NeighbourFlags.Self
+
+
 
     let rec withMin (cmp : IComparer<'Key>) (minKey : 'Key) (node : Node<'Key, 'Value>) =
         if isNull node then
@@ -1654,167 +1797,399 @@ module YamImplementation =
                 let rd = computeDelta cmp r1 node2.Right update invoke revoke
                 binary ld node2.Key self rd
            
-           
-    let rec private applyDeltaSingletonState 
-        (cmp : IComparer<'Key>)
-        (specialKey : 'Key)
-        (specialValue : 'T)
-        (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) 
-        (mapping2 : OptimizedClosures.FSharpFunc<'Key, 'T, 'Value, voption<'T>>) 
-        (node : Node<'Key, 'Value>) = 
+    module ApplyDelta = 
+        let rec private applyDeltaSingletonState 
+            (cmp : IComparer<'Key>)
+            (specialKey : 'Key)
+            (specialValue : 'T)
+            (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) 
+            (mapping2 : OptimizedClosures.FSharpFunc<'Key, 'T, 'Value, voption<'T>>) 
+            (node : Node<'Key, 'Value>) = 
+                if isNull node then
+                    Node(specialKey, specialValue)
+                elif node.Height = 1uy then
+                    let c = cmp.Compare(specialKey, node.Key)
+                    if c > 0 then
+                        match mapping.Invoke(node.Key, node.Value) with
+                        | ValueSome v -> 
+                            Inner(null, node.Key, v, Node(specialKey, specialValue), 2uy, 2) :> Node<_,_>
+                        | ValueNone ->
+                            Node(specialKey, specialValue)
+                    elif c < 0 then
+                        match mapping.Invoke(node.Key, node.Value) with
+                        | ValueSome v -> 
+                            Inner(Node(specialKey, specialValue), node.Key, v, null, 2uy, 2) :> Node<_,_>
+                        | ValueNone ->
+                            Node(specialKey, specialValue)
+                    else
+                        match mapping2.Invoke(node.Key, specialValue, node.Value) with
+                        | ValueSome v ->
+                            Node(node.Key, v)
+                        | ValueNone ->
+                            null
+                else
+                    let node = node :?> Inner<'Key, 'Value>
+                    let c = cmp.Compare(specialKey, node.Key)
+                    if c > 0 then
+                        let l = chooseV mapping node.Left
+                        let s = mapping.Invoke(node.Key, node.Value)
+                        let r = applyDeltaSingletonState cmp specialKey specialValue mapping mapping2 node.Right
+                        match s with
+                        | ValueSome value -> 
+                            binary l node.Key value r
+                        | ValueNone ->
+                            join l r
+                    elif c < 0 then
+                        let l = applyDeltaSingletonState cmp specialKey specialValue mapping mapping2 node.Left
+                        let s = mapping.Invoke(node.Key, node.Value)
+                        let r = chooseV mapping node.Right
+                        match s with
+                        | ValueSome value -> 
+                            binary l node.Key value r
+                        | ValueNone ->
+                            join l r
+                   
+                    else
+                        let l = chooseV mapping node.Left
+                        let self = mapping2.Invoke(node.Key, specialValue, node.Value)
+                        let r = chooseV mapping node.Right
+                        match self with
+                        | ValueSome res ->
+                            binary l node.Key res r
+                        | ValueNone ->
+                            join l r
+
+                        
+        let rec private applyDeltaSingle 
+            (cmp : IComparer<'Key>) 
+            (specialKey : 'Key) 
+            (specialValue : 'T)
+            (update : OptimizedClosures.FSharpFunc<'Key, 'T, voption<'Value>>)
+            (update2 : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T, voption<'Value>>) 
+            (node : Node<'Key, 'Value>) : Node<'Key, 'Value> =
             if isNull node then
-                Node(specialKey, specialValue)
+                match update.Invoke(specialKey, specialValue) with
+                | ValueNone -> null
+                | ValueSome v -> Node(specialKey, v)
+
             elif node.Height = 1uy then
                 let c = cmp.Compare(specialKey, node.Key)
                 if c > 0 then
-                    match mapping.Invoke(node.Key, node.Value) with
-                    | ValueSome v -> 
-                        Inner(null, node.Key, v, Node(specialKey, specialValue), 2uy, 2) :> Node<_,_>
-                    | ValueNone ->
-                        Node(specialKey, specialValue)
+                    match update.Invoke(specialKey, specialValue) with
+                    | ValueNone -> node
+                    | ValueSome n ->
+                        #if COUNT
+                        Inner(node, specialKey, n, null, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(node, key, n, null, 2uy) :> Node<_,_>
+                        #endif
                 elif c < 0 then
-                    match mapping.Invoke(node.Key, node.Value) with
-                    | ValueSome v -> 
-                        Inner(Node(specialKey, specialValue), node.Key, v, null, 2uy, 2) :> Node<_,_>
-                    | ValueNone ->
-                        Node(specialKey, specialValue)
+                    match update.Invoke(specialKey, specialValue) with
+                    | ValueNone -> node
+                    | ValueSome n ->
+                        #if COUNT
+                        Inner(null, specialKey, n, node, 2uy, 2) :> Node<_,_>
+                        #else
+                        Inner(null, key, n, node, 2uy) :> Node<_,_>
+                        #endif
                 else
-                    match mapping2.Invoke(node.Key, specialValue, node.Value) with
-                    | ValueSome v ->
-                        Node(node.Key, v)
-                    | ValueNone ->
-                        null
-            else
+                    match update2.Invoke(specialKey, node.Value, specialValue) with
+                    | ValueNone -> null
+                    | ValueSome v -> Node(specialKey, v)
+            else    
                 let node = node :?> Inner<'Key, 'Value>
                 let c = cmp.Compare(specialKey, node.Key)
                 if c > 0 then
-                    let l = chooseV mapping node.Left
-                    let s = mapping.Invoke(node.Key, node.Value)
-                    let r = applyDeltaSingletonState cmp specialKey specialValue mapping mapping2 node.Right
-                    match s with
-                    | ValueSome value -> 
-                        binary l node.Key value r
-                    | ValueNone ->
-                        join l r
+                    unsafeBinary node.Left node.Key node.Value (applyDeltaSingle cmp specialKey specialValue update update2 node.Right)
                 elif c < 0 then
-                    let l = applyDeltaSingletonState cmp specialKey specialValue mapping mapping2 node.Left
-                    let s = mapping.Invoke(node.Key, node.Value)
-                    let r = chooseV mapping node.Right
-                    match s with
-                    | ValueSome value -> 
-                        binary l node.Key value r
-                    | ValueNone ->
-                        join l r
-                   
+                    unsafeBinary (applyDeltaSingle cmp specialKey specialValue update update2 node.Left) node.Key node.Value node.Right
                 else
-                    let l = chooseV mapping node.Left
-                    let self = mapping2.Invoke(node.Key, specialValue, node.Value)
-                    let r = chooseV mapping node.Right
-                    match self with
-                    | ValueSome res ->
-                        binary l node.Key res r
+                    match update2.Invoke(specialKey, node.Value, specialValue) with
+                    | ValueSome n ->
+                        #if COUNT
+                        Inner(node.Left, specialKey, n, node.Right, node.Height, node.Count) :> Node<_,_>
+                        #else
+                        Inner(node.Left, key, n, node.Right, node.Height) :> Node<_,_>
+                        #endif
                     | ValueNone ->
-                        join l r
-
-                        
-    let rec private applyDeltaSingle 
-        (cmp : IComparer<'Key>) 
-        (specialKey : 'Key) 
-        (specialValue : 'T)
-        (update : OptimizedClosures.FSharpFunc<'Key, 'T, voption<'Value>>)
-        (update2 : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T, voption<'Value>>) 
-        (node : Node<'Key, 'Value>) : Node<'Key, 'Value> =
-        if isNull node then
-            match update.Invoke(specialKey, specialValue) with
-            | ValueNone -> null
-            | ValueSome v -> Node(specialKey, v)
-
-        elif node.Height = 1uy then
-            let c = cmp.Compare(specialKey, node.Key)
-            if c > 0 then
-                match update.Invoke(specialKey, specialValue) with
-                | ValueNone -> node
-                | ValueSome n ->
-                    #if COUNT
-                    Inner(node, specialKey, n, null, 2uy, 2) :> Node<_,_>
-                    #else
-                    Inner(node, key, n, null, 2uy) :> Node<_,_>
-                    #endif
-            elif c < 0 then
-                match update.Invoke(specialKey, specialValue) with
-                | ValueNone -> node
-                | ValueSome n ->
-                    #if COUNT
-                    Inner(null, specialKey, n, node, 2uy, 2) :> Node<_,_>
-                    #else
-                    Inner(null, key, n, node, 2uy) :> Node<_,_>
-                    #endif
-            else
-                match update2.Invoke(specialKey, node.Value, specialValue) with
-                | ValueNone -> null
-                | ValueSome v -> Node(specialKey, v)
-        else    
-            let node = node :?> Inner<'Key, 'Value>
-            let c = cmp.Compare(specialKey, node.Key)
-            if c > 0 then
-                unsafeBinary node.Left node.Key node.Value (applyDeltaSingle cmp specialKey specialValue update update2 node.Right)
-            elif c < 0 then
-                unsafeBinary (applyDeltaSingle cmp specialKey specialValue update update2 node.Left) node.Key node.Value node.Right
-            else
-                match update2.Invoke(specialKey, node.Value, specialValue) with
-                | ValueSome n ->
-                    #if COUNT
-                    Inner(node.Left, specialKey, n, node.Right, node.Height, node.Count) :> Node<_,_>
-                    #else
-                    Inner(node.Left, key, n, node.Right, node.Height) :> Node<_,_>
-                    #endif
-                | ValueNone ->
-                    unsafeJoin node.Left node.Right
+                        unsafeJoin node.Left node.Right
 
 
-    let rec applyDelta
-        (cmp : IComparer<'Key>)
-        (state : Node<'Key, 'Value>)
-        (delta : Node<'Key, 'OP>)
-        (applyNoState : OptimizedClosures.FSharpFunc<'Key, 'OP, voption<'Value>>) 
-        (apply : OptimizedClosures.FSharpFunc<'Key, 'Value, 'OP, voption<'Value>>) =
+        let rec applyDelta
+            (cmp : IComparer<'Key>)
+            (state : Node<'Key, 'Value>)
+            (delta : Node<'Key, 'OP>)
+            (applyNoState : OptimizedClosures.FSharpFunc<'Key, 'OP, voption<'Value>>) 
+            (apply : OptimizedClosures.FSharpFunc<'Key, 'Value, 'OP, voption<'Value>>) =
 
-        if isNull delta then
-            // delta empty
-            state
-        elif isNull state then
-            // state empty
-            chooseV applyNoState delta
+            if isNull delta then
+                // delta empty
+                state
+            elif isNull state then
+                // state empty
+                chooseV applyNoState delta
 
-        elif delta.Height = 1uy then
-            // delta leaf
-            applyDeltaSingle cmp delta.Key delta.Value applyNoState apply state
+            elif delta.Height = 1uy then
+                // delta leaf
+                applyDeltaSingle cmp delta.Key delta.Value applyNoState apply state
 
-        elif state.Height = 1uy then
-            // state leaf
-            applyDeltaSingletonState cmp state.Key state.Value applyNoState apply delta
+            elif state.Height = 1uy then
+                // state leaf
+                applyDeltaSingletonState cmp state.Key state.Value applyNoState apply delta
                 
-        else
-            // both inner
-            let state = state :?> Inner<'Key, 'Value>
-            let mutable dl = null
-            let mutable ds = Unchecked.defaultof<_>
-            let mutable dr = null
-            let hasValue = split cmp state.Key &dl &ds &dr delta
-            let delta = ()
-
-            if hasValue then
-                let l = applyDelta cmp state.Left dl applyNoState apply
-                let self = apply.Invoke(state.Key, state.Value, ds)
-                let r = applyDelta cmp state.Right dr applyNoState apply
-                match self with
-                | ValueSome self -> binary l state.Key self r
-                | ValueNone -> join l r
             else
-                let l = applyDelta cmp state.Left dl applyNoState apply
-                let r = applyDelta cmp state.Right dr applyNoState apply
-                binary l state.Key state.Value r
+                // both inner
+                let state = state :?> Inner<'Key, 'Value>
+                let mutable dl = null
+                let mutable ds = Unchecked.defaultof<_>
+                let mutable dr = null
+                let hasValue = split cmp state.Key &dl &ds &dr delta
+                let delta = ()
+
+                if hasValue then
+                    let l = applyDelta cmp state.Left dl applyNoState apply
+                    let self = apply.Invoke(state.Key, state.Value, ds)
+                    let r = applyDelta cmp state.Right dr applyNoState apply
+                    match self with
+                    | ValueSome self -> binary l state.Key self r
+                    | ValueNone -> join l r
+                else
+                    let l = applyDelta cmp state.Left dl applyNoState apply
+                    let r = applyDelta cmp state.Right dr applyNoState apply
+                    binary l state.Key state.Value r
             
+
+        let rec chooseVAndGetEffective 
+            (mapping : OptimizedClosures.FSharpFunc<'Key, 'Value, voption<'T>>) 
+            (effective : byref<Node<'Key, 'Value>>) 
+            (node : Node<'Key, 'Value>) =
+            if isNull node then
+                effective <- null
+                null
+            elif node.Height = 1uy then
+                match mapping.Invoke(node.Key, node.Value) with
+                | ValueSome v -> 
+                    effective <- node
+                    Node(node.Key, v)
+                | ValueNone -> 
+                    effective <- null
+                    null
+            else
+                let node = node :?> Inner<'Key, 'Value>
+                let mutable re = null
+                let l = chooseVAndGetEffective mapping &effective node.Left
+                let s = mapping.Invoke(node.Key, node.Value)
+                let r = chooseVAndGetEffective mapping &re node.Right
+                
+                match s with
+                | ValueSome s -> 
+                    effective <- binary effective node.Key node.Value re
+                    binary l node.Key s r
+                | ValueNone -> 
+                    effective <- join effective re
+                    join l r
+
+        let rec private applyDeltaSingletonStateEff 
+            (cmp : IComparer<'Key>)
+            (specialKey : 'Key)
+            (specialValue : 'Value)
+            (mapping : OptimizedClosures.FSharpFunc<'Key, 'OP, voption<'Value>>) 
+            (mapping2 : OptimizedClosures.FSharpFunc<'Key, 'Value, 'OP, voption<'Value>>) 
+            (equal : OptimizedClosures.FSharpFunc<'Value, 'Value, bool>)
+            (effective : byref<Node<'Key, 'OP>>)
+            (delta : Node<'Key, 'OP>) = 
+                if isNull delta then
+                    effective <- null
+                    Node(specialKey, specialValue)
+
+                elif delta.Height = 1uy then
+                    let c = cmp.Compare(specialKey, delta.Key)
+                    if c > 0 then
+                        match mapping.Invoke(delta.Key, delta.Value) with
+                        | ValueSome v -> 
+                            effective <- delta
+                            Inner(null, delta.Key, v, Node(specialKey, specialValue), 2uy, 2) :> Node<_,_>
+                        | ValueNone ->
+                            effective <- null
+                            Node(specialKey, specialValue)
+                    elif c < 0 then
+                        match mapping.Invoke(delta.Key, delta.Value) with
+                        | ValueSome v -> 
+                            effective <- delta
+                            Inner(Node(specialKey, specialValue), delta.Key, v, null, 2uy, 2) :> Node<_,_>
+                        | ValueNone ->
+                            effective <- null
+                            Node(specialKey, specialValue)
+                    else
+                        match mapping2.Invoke(delta.Key, specialValue, delta.Value) with
+                        | ValueSome v ->
+                            if equal.Invoke(specialValue, v) then effective <- null
+                            else effective <- delta
+                            Node(delta.Key, v)
+                        | ValueNone ->
+                            effective <- delta
+                            null
+                else
+                    let delta = delta :?> Inner<'Key, 'OP>
+                    let c = cmp.Compare(specialKey, delta.Key)
+                    if c > 0 then
+                        let mutable re = null
+                        let l = chooseVAndGetEffective mapping &effective delta.Left
+                        let s = mapping.Invoke(delta.Key, delta.Value)
+                        let r = applyDeltaSingletonStateEff cmp specialKey specialValue mapping mapping2 equal &re delta.Right
+                        match s with
+                        | ValueSome value -> 
+                            effective <- binary effective delta.Key delta.Value re
+                            binary l delta.Key value r
+                        | ValueNone ->
+                            effective <- join effective re
+                            join l r
+                    elif c < 0 then
+                        let mutable re = null
+                        let l = applyDeltaSingletonStateEff cmp specialKey specialValue mapping mapping2 equal &effective delta.Left
+                        let s = mapping.Invoke(delta.Key, delta.Value)
+                        let r = chooseVAndGetEffective mapping &re delta.Right
+                        match s with
+                        | ValueSome value -> 
+                            effective <- binary effective delta.Key delta.Value re
+                            binary l delta.Key value r
+                        | ValueNone ->
+                            effective <- join effective re
+                            join l r
+                   
+                    else
+                        let mutable re = null
+                        let l = chooseVAndGetEffective mapping &effective delta.Left
+                        let self = mapping2.Invoke(delta.Key, specialValue, delta.Value)
+                        let r = chooseVAndGetEffective mapping &re delta.Right
+                        match self with
+                        | ValueSome res ->
+                            if equal.Invoke(res, specialValue) then effective <- join effective re
+                            else effective <- binary effective delta.Key delta.Value re
+                            binary l delta.Key res r
+                        | ValueNone ->
+                            effective <- binary effective delta.Key delta.Value re
+                            join l r
+
+
+        let rec private applyDeltaSingleEff
+            (cmp : IComparer<'Key>) 
+            (specialKey : 'Key) 
+            (specialValue : 'T)
+            (update : OptimizedClosures.FSharpFunc<'Key, 'T, voption<'Value>>)
+            (update2 : OptimizedClosures.FSharpFunc<'Key, 'Value, 'T, voption<'Value>>) 
+            (equal : OptimizedClosures.FSharpFunc<'Value, 'Value, bool>)
+            (original : Node<'Key, _>)
+            (effective : byref<Node<'Key, _>>)
+            (node : Node<'Key, 'Value>) : Node<'Key, 'Value> =
+            if isNull node then
+                match update.Invoke(specialKey, specialValue) with
+                | ValueNone -> 
+                    effective <- null
+                    null
+                | ValueSome v -> 
+                    effective <- original
+                    Node(specialKey, v)
+
+            elif node.Height = 1uy then
+                let c = cmp.Compare(specialKey, node.Key)
+                if c > 0 then
+                    match update.Invoke(specialKey, specialValue) with
+                    | ValueNone -> 
+                        effective <- null
+                        node
+                    | ValueSome n ->
+                        effective <- original
+                        Inner(node, specialKey, n, null, 2uy, 2) :> Node<_,_>
+                elif c < 0 then
+                    match update.Invoke(specialKey, specialValue) with
+                    | ValueNone -> 
+                        effective <- null
+                        node
+                    | ValueSome n ->
+                        effective <- original
+                        Inner(null, specialKey, n, node, 2uy, 2) :> Node<_,_>
+                else
+                    match update2.Invoke(specialKey, node.Value, specialValue) with
+                    | ValueNone -> 
+                        effective <- original
+                        null
+                    | ValueSome v -> 
+                        effective <- if equal.Invoke(node.Value, v) then null else original
+                        Node(specialKey, v)
+            else    
+                let node = node :?> Inner<'Key, 'Value>
+                let c = cmp.Compare(specialKey, node.Key)
+                if c > 0 then
+                    unsafeBinary node.Left node.Key node.Value (applyDeltaSingleEff cmp specialKey specialValue update update2 equal original &effective node.Right)
+                elif c < 0 then
+                    unsafeBinary (applyDeltaSingleEff cmp specialKey specialValue update update2 equal original &effective node.Left) node.Key node.Value node.Right
+                else
+                    match update2.Invoke(specialKey, node.Value, specialValue) with
+                    | ValueSome n ->
+                        effective <- if equal.Invoke(node.Value, n) then null else original
+                        Inner(node.Left, specialKey, n, node.Right, node.Height, node.Count) :> Node<_,_>
+                    | ValueNone ->
+                        effective <- original
+                        unsafeJoin node.Left node.Right
+
+        let rec applyDeltaAndGetEffective
+            (cmp : IComparer<'Key>)
+            (state : Node<'Key, 'Value>)
+            (delta : Node<'Key, 'OP>)
+            (applyNoState : OptimizedClosures.FSharpFunc<'Key, 'OP, voption<'Value>>) 
+            (apply : OptimizedClosures.FSharpFunc<'Key, 'Value, 'OP, voption<'Value>>) 
+            (equal : OptimizedClosures.FSharpFunc<'Value, 'Value, bool>)
+            (effective : byref<Node<'Key, 'OP>>) =
+
+            if isNull delta then
+                // delta empty
+                effective <- null
+                state
+
+            elif isNull state then
+                // state empty
+                chooseVAndGetEffective applyNoState &effective delta
+
+            elif delta.Height = 1uy then
+                // delta leaf
+                applyDeltaSingleEff cmp delta.Key delta.Value applyNoState apply equal delta &effective state
+      
+            elif state.Height = 1uy then
+                // state leaf
+                applyDeltaSingletonStateEff cmp state.Key state.Value applyNoState apply equal &effective delta
+                
+            else
+                // both inner
+                let state = state :?> Inner<'Key, 'Value>
+                let mutable dl = null
+                let mutable ds = Unchecked.defaultof<_>
+                let mutable dr = null
+                let hasValue = split cmp state.Key &dl &ds &dr delta
+                let delta = ()
+
+                let mutable re = null
+
+                if hasValue then
+                    let l = applyDeltaAndGetEffective cmp state.Left dl applyNoState apply equal &effective
+                    let self = apply.Invoke(state.Key, state.Value, ds)
+                    let r = applyDeltaAndGetEffective cmp state.Right dr applyNoState apply equal &re
+                    match self with
+                    | ValueSome self -> 
+                        if equal.Invoke(state.Value, self) then effective <- join effective re
+                        else effective <- binary effective state.Key ds re
+                        binary l state.Key self r
+                    | ValueNone -> 
+                        effective <- binary effective state.Key ds re
+                        join l r
+                else
+                    let l = applyDeltaAndGetEffective cmp state.Left dl applyNoState apply equal &effective
+                    let r = applyDeltaAndGetEffective cmp state.Right dr applyNoState apply equal &re
+                    effective <- join effective re
+                    binary l state.Key state.Value r
+            
+
+
 
 
     type YamMappingEnumerator<'Key, 'Value, 'T> =
@@ -1963,6 +2338,31 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
             Yam(comparer, newRoot)
         else    
             x
+
+    member x.RemoveAt(index : int) =
+        if index < 0 || index >= x.Count then x
+        else 
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            Yam(comparer, YamImplementation.removeAt index &k &v root)
+            
+    member x.TryRemoveAt(index : int) =
+        if index < 0 || index >= x.Count then 
+            None
+        else 
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let res = Yam(comparer, YamImplementation.removeAt index &k &v root)
+            Some ((k, v), res)
+            
+    member x.TryRemoveAtV(index : int) =
+        if index < 0 || index >= x.Count then 
+            ValueNone
+        else 
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            let res = Yam(comparer, YamImplementation.removeAt index &k &v root)
+            ValueSome struct(k, v, res)
             
     member x.TryRemove(key : 'Key, [<Out>] result : byref<Yam<'Key, 'Value>>, [<Out>] removedValue : byref<'Value>) =
         let mutable newRoot = null
@@ -2002,6 +2402,45 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
 
     member x.Find(key : 'Key) =
         YamImplementation.find comparer key root
+
+
+    member x.TryItem(index : int) =
+        if index < 0 || index >= x.Count then None
+        else
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            YamImplementation.tryGetItem index &k &v root |> ignore
+            Some (k, v)
+            
+    member x.TryItemV(index : int) =
+        if index < 0 || index >= x.Count then ValueNone
+        else
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            YamImplementation.tryGetItem index &k &v root |> ignore
+            ValueSome struct(k, v)
+
+    member x.TryGetItem(index : int, [<Out>] key : byref<'Key>, [<Out>] value : byref<'Value>) =
+        YamImplementation.tryGetItem index &key &value root 
+
+    member x.GetItem(index : int) =
+        if index < 0 || index >= x.Count then
+            raise <| System.IndexOutOfRangeException()
+        else
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            YamImplementation.tryGetItem index &k &v root |> ignore
+            (k, v)
+            
+    member x.GetItemV(index : int) =
+        if index < 0 || index >= x.Count then
+            raise <| System.IndexOutOfRangeException()
+        else
+            let mutable k = Unchecked.defaultof<_>
+            let mutable v = Unchecked.defaultof<_>
+            YamImplementation.tryGetItem index &k &v root |> ignore
+            struct(k, v)
+        
 
     member x.TryGetValue(key : 'Key, [<Out>] value : byref<'Value>) =
         YamImplementation.tryGetValue comparer key &value root
@@ -2231,6 +2670,99 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
             | Some max -> x.WithMax max
             | None -> x
 
+    member x.Neighbours(key : 'Key) =
+        let mutable lKey = Unchecked.defaultof<_>
+        let mutable rKey = Unchecked.defaultof<_>
+        let mutable lValue = Unchecked.defaultof<_>
+        let mutable rValue = Unchecked.defaultof<_>
+        let mutable sValue = Unchecked.defaultof<_>
+        let flags = YamImplementation.getNeighbours comparer key YamImplementation.NeighbourFlags.None &lKey &lValue &sValue &rKey &rValue root
+
+        let left =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Left then Some (lKey, lValue)
+            else None
+            
+        let self =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Self then Some (sValue)
+            else None
+            
+        let right =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Right then Some (rKey, rValue)
+            else None
+
+        left, self, right
+        
+
+    member x.NeighboursV(key : 'Key) =
+        let mutable lKey = Unchecked.defaultof<_>
+        let mutable rKey = Unchecked.defaultof<_>
+        let mutable lValue = Unchecked.defaultof<_>
+        let mutable rValue = Unchecked.defaultof<_>
+        let mutable sValue = Unchecked.defaultof<_>
+        let flags = YamImplementation.getNeighbours comparer key YamImplementation.NeighbourFlags.None &lKey &lValue &sValue &rKey &rValue root
+
+        let left =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Left then ValueSome struct(lKey, lValue)
+            else ValueNone
+            
+        let self =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Self then ValueSome (sValue)
+            else ValueNone
+            
+        let right =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Right then ValueSome struct(rKey, rValue)
+            else ValueNone
+
+        struct(left, self, right)
+
+    member x.NeighboursAt(index : int) =
+        let mutable lKey = Unchecked.defaultof<_>
+        let mutable rKey = Unchecked.defaultof<_>
+        let mutable sKey = Unchecked.defaultof<_>
+        let mutable lValue = Unchecked.defaultof<_>
+        let mutable rValue = Unchecked.defaultof<_>
+        let mutable sValue = Unchecked.defaultof<_>
+        let flags = YamImplementation.getNeighboursAt index YamImplementation.NeighbourFlags.None &lKey &lValue &sKey &sValue &rKey &rValue root
+
+        let left =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Left then Some (lKey, lValue)
+            else None
+            
+        let self =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Self then Some (sKey, sValue)
+            else None
+            
+        let right =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Right then Some (rKey, rValue)
+            else None
+
+        left, self, right
+        
+    member x.NeighboursAtV(index : int) =
+        let mutable lKey = Unchecked.defaultof<_>
+        let mutable rKey = Unchecked.defaultof<_>
+        let mutable sKey = Unchecked.defaultof<_>
+        let mutable lValue = Unchecked.defaultof<_>
+        let mutable rValue = Unchecked.defaultof<_>
+        let mutable sValue = Unchecked.defaultof<_>
+        let flags = YamImplementation.getNeighboursAt index YamImplementation.NeighbourFlags.None &lKey &lValue &sKey &sValue &rKey &rValue root
+
+        let left =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Left then ValueSome struct(lKey, lValue)
+            else ValueNone
+            
+        let self =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Self then ValueSome struct(sKey, sValue)
+            else ValueNone
+            
+        let right =
+            if flags.HasFlag YamImplementation.NeighbourFlags.Right then ValueSome struct(rKey, rValue)
+            else ValueNone
+
+        struct(left, self, right)
+        
+
+
     static member Union(l : Yam<'Key, 'Value>, r : Yam<'Key, 'Value>) =
         let cmp = defaultComparer
         Yam(cmp, YamImplementation.union cmp l.Root r.Root)
@@ -2254,7 +2786,18 @@ type Yam<'Key, 'Value when 'Key : comparison>(comparer : IComparer<'Key>, root :
         let apply = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt apply
         let applyNoState = OptimizedClosures.FSharpFunc<_,_,_>.Adapt (fun k o -> apply.Invoke(k, ValueNone, o))
         let applyReal = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt (fun k v o -> apply.Invoke(k, ValueSome v, o))
-        Yam(comparer, YamImplementation.applyDelta comparer root delta.Root applyNoState applyReal)
+        Yam(comparer, YamImplementation.ApplyDelta.applyDelta comparer root delta.Root applyNoState applyReal)
+        
+        
+    member x.ApplyDeltaAndGetEffective(delta : Yam<'Key, 'OP>, apply : 'Key -> voption<'Value> -> 'OP -> voption<'Value>) =
+        let apply = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt apply
+        let applyNoState = OptimizedClosures.FSharpFunc<_,_,_>.Adapt (fun k o -> apply.Invoke(k, ValueNone, o))
+        let applyReal = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt (fun k v o -> apply.Invoke(k, ValueSome v, o))
+        let equal = OptimizedClosures.FSharpFunc<_,_,_>.Adapt Unchecked.equals
+
+        let mutable effective = null
+        let root = YamImplementation.ApplyDelta.applyDeltaAndGetEffective comparer root delta.Root applyNoState applyReal equal &effective
+        Yam(comparer, root), Yam(comparer, effective)
         
 
     member x.GetEnumerator() = new YamEnumerator<_,_>(root)
@@ -2355,14 +2898,27 @@ module Yam =
     let inline count (map : Yam<'Key, 'Value>) = map.Count
 
     let inline add (key : 'Key) (value : 'Value) (map : Yam<'Key, 'Value>) = map.Add(key, value)
-    let inline remove (key : 'Key) (map : Yam<'Key, 'Value>) = map.Remove(key)
     let inline change (key : 'Key) (update : option<'Value> -> option<'Value>) (map : Yam<'Key, 'Value>) = map.Change(key, update)
     let inline changeV (key : 'Key) (update : voption<'Value> -> voption<'Value>) (map : Yam<'Key, 'Value>) = map.Change(key, update)
 
+    let inline remove (key : 'Key) (map : Yam<'Key, 'Value>) = map.Remove(key)
+    let inline tryRemove (key : 'Key) (map : Yam<'Key, 'Value>) = map.TryRemove(key)
+    let inline tryRemoveV (key : 'Key) (map : Yam<'Key, 'Value>) = map.TryRemoveV(key)
+    
+    let inline removeAt (index : int) (map : Yam<'Key, 'Value>) = map.RemoveAt(index)
+    let inline tryRemoveAt (index : int) (map : Yam<'Key, 'Value>) = map.TryRemoveAt(index)
+    let inline tryRemoveAtV (index : int) (map : Yam<'Key, 'Value>) = map.TryRemoveAtV(index)
+
     let inline tryFind (key : 'Key) (map : Yam<'Key, 'Value>) = map.TryFind key
     let inline tryFindV (key : 'Key) (map : Yam<'Key, 'Value>) = map.TryFindV key
-    let inline containsKey (key : 'Key) (map : Yam<'Key, 'Value>) = map.ContainsKey key
     let inline find (key : 'Key) (map : Yam<'Key, 'Value>) = map.Find key
+    
+    let inline tryItem (index : int) (map : Yam<'Key, 'Value>) = map.TryItem index
+    let inline tryItemV (index : int) (map : Yam<'Key, 'Value>) = map.TryItemV index
+    let inline item (index : int) (map : Yam<'Key, 'Value>) = map.GetItem index
+    let inline itemV (index : int) (map : Yam<'Key, 'Value>) = map.GetItemV index
+
+    let inline containsKey (key : 'Key) (map : Yam<'Key, 'Value>) = map.ContainsKey key
 
     let inline tryMin (map : Yam<'Key, 'Value>) = map.TryMin()
     let inline tryMax (map : Yam<'Key, 'Value>) = map.TryMax()
@@ -2397,6 +2953,12 @@ module Yam =
     let inline changeWithNeighboursV (key : 'Key) (update : voption<struct('Key * 'Value)> -> voption<'Value> -> voption<struct('Key * 'Value)> -> voption<'Value>) (map : Yam<'Key, 'Value>) =
         map.ChangeWithNeighboursV(key, update)
 
+    let inline neighbours (key : 'Key) (map : Yam<'Key, 'Value>) = map.Neighbours key
+    let inline neighboursV (key : 'Key) (map : Yam<'Key, 'Value>) = map.NeighboursV key
+    let inline neighboursAt (index : int) (map : Yam<'Key, 'Value>) = map.NeighboursAt index
+    let inline neighboursAtV (index : int) (map : Yam<'Key, 'Value>) = map.NeighboursAtV index
+
+
     let inline ofSeq (elements : seq<'Key * 'Value>) = Yam.FromSeq elements
     let inline ofSeqV (elements : seq<struct('Key * 'Value)>) = Yam.FromSeqV elements
     let inline ofList (elements : list<'Key * 'Value>) = Yam.FromList elements
@@ -2426,4 +2988,9 @@ module Yam =
         (apply : 'Key -> voption<'Value> -> 'OP -> voption<'Value>)
         (state : Yam<'Key, 'Value>) (delta : Yam<'Key, 'OP>) =
         state.ApplyDelta(delta, apply)
+                                
+    let inline applyDeltaAndGetEffective
+        (apply : 'Key -> voption<'Value> -> 'OP -> voption<'Value>)
+        (state : Yam<'Key, 'Value>) (delta : Yam<'Key, 'OP>) =
+        state.ApplyDeltaAndGetEffective(delta, apply)
                                 
